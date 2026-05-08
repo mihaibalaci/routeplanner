@@ -210,6 +210,60 @@ a:hover {
   opacity: 0.8;
 }
 
+/* Sidebar user section */
+.sidebar__user {
+  padding: var(--space-3);
+  border-top: 1px solid var(--color-border-light);
+}
+
+.user-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+}
+
+.user-indicator__avatar {
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+}
+
+.user-indicator__avatar .material-symbols-rounded {
+  font-size: 28px;
+}
+
+.user-indicator__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-indicator__email {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.user-indicator__logout {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  transition: color var(--transition-fast);
+}
+
+.user-indicator__logout:hover {
+  color: var(--color-danger);
+}
+
 /* Main content */
 .main-content {
   flex: 1;

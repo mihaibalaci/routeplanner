@@ -1,6 +1,7 @@
 /**
- * App Shell — Modern sidebar layout
+ * App Shell — Modern sidebar layout with auth indicator
  */
+import { apiClient } from '../api/client';
 
 export interface NavItem {
   label: string;
@@ -33,6 +34,7 @@ export class AppShell {
     this.container.innerHTML = this.buildLayout();
     this.contentArea = this.container.querySelector('.main-content__inner');
     this.bindEvents();
+    this.listenForAuthChanges();
   }
 
   getContentArea(): HTMLElement | null {
@@ -56,7 +58,6 @@ export class AppShell {
   }
 
   private buildSidebar(): string {
-    // Group nav items by section
     const sections = new Map<string, NavItem[]>();
     for (const item of NAV_ITEMS) {
       const section = item.section || 'General';
@@ -87,13 +88,71 @@ export class AppShell {
         <nav class="sidebar__nav">
           ${navHtml}
         </nav>
+        <div class="sidebar__user" id="sidebar-user">
+          ${this.buildUserSection()}
+        </div>
       </aside>
     `;
+  }
+
+  private buildUserSection(): string {
+    if (apiClient.isAuthenticated()) {
+      const email = this.getEmailFromToken();
+      return `
+        <div class="user-indicator">
+          <div class="user-indicator__avatar">
+            <span class="material-symbols-rounded">account_circle</span>
+          </div>
+          <div class="user-indicator__info">
+            <span class="user-indicator__email">${email}</span>
+          </div>
+          <button class="user-indicator__logout" id="btn-logout" title="Log out">
+            <span class="material-symbols-rounded">logout</span>
+          </button>
+        </div>
+      `;
+    }
+    return `
+      <a class="nav-item" href="/login" data-nav="/login">
+        <span class="material-symbols-rounded nav-item__icon">login</span>
+        Log In
+      </a>
+    `;
+  }
+
+  private getEmailFromToken(): string {
+    const token = apiClient.getToken();
+    if (!token) return '';
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload.email || payload.sub || 'User';
+    } catch {
+      return 'User';
+    }
+  }
+
+  private updateUserSection(): void {
+    const el = this.container.querySelector('#sidebar-user');
+    if (el) el.innerHTML = this.buildUserSection();
+  }
+
+  private listenForAuthChanges(): void {
+    window.addEventListener('app:navigate', () => this.updateUserSection());
   }
 
   private bindEvents(): void {
     this.container.addEventListener('click', (e: Event) => {
       const target = e.target as HTMLElement;
+
+      // Handle logout
+      if (target.closest('#btn-logout')) {
+        e.preventDefault();
+        apiClient.clearTokens();
+        this.updateUserSection();
+        this.navigate('/login');
+        return;
+      }
+
       const link = target.closest('[data-nav]') as HTMLElement | null;
       if (link) {
         e.preventDefault();
