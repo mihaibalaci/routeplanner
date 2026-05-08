@@ -1,0 +1,568 @@
+/* Base styles for Route Planner frontend */
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: 'Roboto', 'Helvetica', 'Arial', sans-serif;
+}
+
+#app {
+  height: 100%;
+}
+
+/* Layout overrides */
+.mdl-layout__drawer {
+  border-right: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.mdl-layout__drawer .mdl-navigation__link {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  color: rgba(0, 0, 0, 0.87);
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.mdl-layout__drawer .mdl-navigation__link:hover {
+  background-color: rgba(63, 81, 181, 0.08);
+}
+
+.mdl-layout__drawer .mdl-navigation__link.is-active {
+  color: #3f51b5;
+  background-color: rgba(63, 81, 181, 0.12);
+  font-weight: 500;
+}
+
+.mdl-layout__drawer .mdl-navigation__link .nav-icon {
+  font-size: 24px;
+  width: 24px;
+  height: 24px;
+}
+
+/* Header */
+.mdl-layout__header {
+  background-color: #3f51b5;
+}
+
+.mdl-layout__header .mdl-navigation__link {
+  color: rgba(255, 255, 255, 0.87);
+}
+
+/* Content area */
+.app-content {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* Responsive adjustments */
+@media (max-width: 839px) {
+  .app-content {
+    padding: 16px;
+  }
+}
+
+/* Card styles */
+.app-card {
+  width: 100%;
+  margin-bottom: 24px;
+}
+
+.app-card .mdl-card__title {
+  padding: 16px;
+}
+
+.app-card .mdl-card__supporting-text {
+  width: 100%;
+  padding: 16px;
+}
+
+/* Form styles */
+.form-field {
+  margin-bottom: 16px;
+  width: 100%;
+}
+
+.form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 16px 0;
+}
+
+/* Loading indicator */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+/* Snackbar / toast messages */
+.app-snackbar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+}
+
+/* Auth pages */
+.auth-page {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 24px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+}
+
+.auth-card__body {
+  width: 100%;
+  padding: 0 24px 24px;
+}
+
+.auth-card .mdl-card__title {
+  justify-content: center;
+  padding-bottom: 0;
+}
+
+/* Auth error message */
+.auth-error {
+  display: none;
+  background-color: #ffebee;
+  color: #c62828;
+  padding: 12px 16px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.auth-error.is-visible {
+  display: block;
+}
+
+/* SSO divider */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  margin: 24px 0;
+  color: rgba(0, 0, 0, 0.54);
+  font-size: 14px;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background-color: rgba(0, 0, 0, 0.12);
+}
+
+.auth-divider span {
+  padding: 0 16px;
+}
+
+/* SSO buttons */
+.auth-sso-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auth-sso-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  text-transform: none;
+  font-weight: 500;
+  padding: 10px 16px;
+}
+
+.auth-sso-btn--google {
+  background-color: #fff;
+  color: rgba(0, 0, 0, 0.87);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.auth-sso-btn--google:hover {
+  background-color: #f5f5f5;
+}
+
+.auth-sso-btn--apple {
+  background-color: #000;
+  color: #fff;
+}
+
+.auth-sso-btn--apple:hover {
+  background-color: #333;
+}
+
+.sso-icon {
+  flex-shrink: 0;
+}
+
+/* Auth footer */
+.auth-footer {
+  text-align: center;
+  margin-top: 24px;
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.54);
+}
+
+.auth-link {
+  color: #3f51b5;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.auth-link:hover {
+  text-decoration: underline;
+}
+
+/* Password requirements */
+.password-requirements {
+  margin: 8px 0 16px;
+  padding: 12px 16px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.password-requirements__title {
+  margin: 0 0 8px;
+  color: rgba(0, 0, 0, 0.54);
+  font-weight: 500;
+}
+
+.password-requirements__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.password-req {
+  padding: 2px 0;
+  color: rgba(0, 0, 0, 0.54);
+}
+
+.password-req::before {
+  content: '○ ';
+}
+
+.password-req.is-met {
+  color: #4caf50;
+}
+
+.password-req.is-met::before {
+  content: '✓ ';
+}
+
+.password-req.is-unmet {
+  color: #f44336;
+}
+
+.password-req.is-unmet::before {
+  content: '✗ ';
+}
+
+/* ===========================
+   Route Planner Page Styles
+   =========================== */
+
+.route-planner {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 16px;
+  height: calc(100vh - 80px);
+  min-height: 500px;
+}
+
+@media (max-width: 960px) {
+  .route-planner {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 400px;
+    height: auto;
+  }
+}
+
+/* Panel (left side) */
+.route-planner__panel {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-right: 8px;
+}
+
+.route-panel-card {
+  width: 100%;
+  min-height: auto;
+}
+
+.route-panel-card .mdl-card__title {
+  padding: 12px 16px;
+}
+
+.route-panel-card .mdl-card__title-text {
+  display: flex;
+  align-items: center;
+  font-size: 18px;
+}
+
+.route-panel-card .mdl-card__supporting-text {
+  width: 100%;
+  padding: 8px 16px 16px;
+}
+
+/* Map (right side) */
+.route-planner__map {
+  position: relative;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.route-map-container {
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  background: #e0e0e0;
+}
+
+/* Map placeholder (when Google Maps not loaded) */
+.map-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #757575;
+  text-align: center;
+  padding: 24px;
+}
+
+.map-placeholder .material-icons {
+  font-size: 64px;
+  margin-bottom: 16px;
+  color: #bdbdbd;
+}
+
+.map-placeholder__hint {
+  font-size: 12px;
+  color: #9e9e9e;
+}
+
+/* Loading overlay on map */
+.map-loading {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.75);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 10;
+}
+
+.map-loading.is-visible {
+  display: flex;
+}
+
+.map-loading__text {
+  font-size: 14px;
+  color: #616161;
+}
+
+/* Waypoint list */
+.waypoint-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.waypoint-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.waypoint-input__icon {
+  color: #3f51b5;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.waypoint-input__field {
+  flex: 1;
+  padding: 0;
+}
+
+.waypoint-input__field .mdl-textfield__input {
+  font-size: 14px;
+  padding: 4px 0;
+}
+
+.waypoint-input__actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.waypoint-input__actions .mdl-button--icon {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0;
+}
+
+.waypoint-input__actions .mdl-button--icon .material-icons {
+  font-size: 18px;
+}
+
+/* Add stop button area */
+.waypoint-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  margin-top: 4px;
+}
+
+.waypoint-actions__label {
+  font-size: 13px;
+  color: #616161;
+}
+
+/* Route info panel */
+.route-totals {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+.route-total-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.route-total-item .material-icons {
+  color: #3f51b5;
+  font-size: 28px;
+}
+
+.route-total-value {
+  font-size: 20px;
+  font-weight: 500;
+  color: #212121;
+}
+
+.route-total-label {
+  font-size: 12px;
+  color: #757575;
+}
+
+.segment-heading {
+  margin: 12px 0 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #424242;
+}
+
+.segment-table {
+  width: 100%;
+  font-size: 13px;
+}
+
+.segment-table th,
+.segment-table td {
+  padding: 6px 8px;
+}
+
+/* Alternatives panel */
+.alternatives-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.alternative-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #f5f5f5;
+  border-radius: 4px;
+}
+
+.alternative-label {
+  font-weight: 500;
+  font-size: 14px;
+  min-width: 60px;
+}
+
+.alternative-info {
+  flex: 1;
+  font-size: 13px;
+  color: #616161;
+}
+
+/* Error toast */
+.route-error-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #d32f2f;
+  color: #fff;
+  padding: 12px 24px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 10000;
+  font-size: 14px;
+  animation: toast-in 0.3s ease;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
