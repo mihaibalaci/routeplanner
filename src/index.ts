@@ -26,7 +26,46 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Security middleware
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          'https://code.getmdl.io',
+          'https://maps.googleapis.com',
+          'https://maps.gstatic.com',
+        ],
+        scriptSrcAttr: ["'unsafe-inline'"],
+        styleSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          'https://code.getmdl.io',
+          'https://fonts.googleapis.com',
+        ],
+        fontSrc: [
+          "'self'",
+          'https://fonts.gstatic.com',
+          'data:',
+        ],
+        imgSrc: [
+          "'self'",
+          'data:',
+          'https://maps.googleapis.com',
+          'https://maps.gstatic.com',
+          'https://developers.google.com',
+          'https://*.googleusercontent.com',
+        ],
+        connectSrc: [
+          "'self'",
+          'https://maps.googleapis.com',
+        ],
+      },
+    },
+  })
+);
 app.use(cors());
 
 // Body parsing
