@@ -41,40 +41,44 @@ export class RoutePlannerPage {
         <div class="route-planner-layout">
           <div class="route-planner-layout__main">
             <div style="display:grid;grid-template-columns:380px 1fr;gap:var(--space-4);min-height:500px;">
-              <div class="card" style="align-self:start;">
-                <div class="card__title" style="margin-bottom:var(--space-4);">Waypoints</div>
-                <div style="display:flex;flex-direction:column;gap:var(--space-3);">
-                  <div class="input-group">
-                    <label class="input-group__label">Origin</label>
-                    <input class="input" type="text" id="origin-input" placeholder="Starting point" />
+              <div style="display:flex;flex-direction:column;gap:var(--space-4);">
+                <div class="card" style="align-self:start;">
+                  <div class="card__title" style="margin-bottom:var(--space-4);">Waypoints</div>
+                  <div style="display:flex;flex-direction:column;gap:var(--space-3);">
+                    <div class="input-group">
+                      <label class="input-group__label">Origin</label>
+                      <input class="input" type="text" id="origin-input" placeholder="Starting point" />
+                    </div>
+                    <div id="stops-container"></div>
+                    <div class="input-group">
+                      <label class="input-group__label">Destination</label>
+                      <input class="input" type="text" id="dest-input" placeholder="Final destination" />
+                    </div>
+                    <button id="btn-add-stop" class="btn btn--ghost" style="align-self:flex-start;">
+                      <span class="material-symbols-rounded">add_location</span> Add Stop
+                    </button>
                   </div>
-                  <div id="stops-container"></div>
-                  <div class="input-group">
-                    <label class="input-group__label">Destination</label>
-                    <input class="input" type="text" id="dest-input" placeholder="Final destination" />
+                  <div style="margin-top:var(--space-4);">
+                    <button id="btn-calculate" class="btn btn--primary btn--lg" style="width:100%;" ${this.calculating ? 'disabled' : ''}>
+                      ${this.calculating ? '<span class="spinner" style="width:16px;height:16px;"></span> Calculating...' : '<span class="material-symbols-rounded">directions</span> Calculate Route'}
+                    </button>
                   </div>
-                  <button id="btn-add-stop" class="btn btn--ghost" style="align-self:flex-start;">
-                    <span class="material-symbols-rounded">add_location</span> Add Stop
-                  </button>
-                </div>
-                <div style="margin-top:var(--space-4);">
-                  <button id="btn-calculate" class="btn btn--primary btn--lg" style="width:100%;" ${this.calculating ? 'disabled' : ''}>
-                    ${this.calculating ? '<span class="spinner" style="width:16px;height:16px;"></span> Calculating...' : '<span class="material-symbols-rounded">directions</span> Calculate Route'}
-                  </button>
+
+                  ${this.routeResult ? `
+                  <div style="margin-top:var(--space-4);padding:var(--space-4);background:var(--color-primary-50);border-radius:var(--radius-lg);">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:var(--space-2);">
+                      <span style="color:var(--color-text-secondary);font-size:var(--font-size-sm);">Distance</span>
+                      <strong>${this.routeResult.distance}</strong>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;">
+                      <span style="color:var(--color-text-secondary);font-size:var(--font-size-sm);">Duration</span>
+                      <strong>${this.routeResult.duration}</strong>
+                    </div>
+                  </div>
+                  ` : ''}
                 </div>
 
-                ${this.routeResult ? `
-                <div style="margin-top:var(--space-4);padding:var(--space-4);background:var(--color-primary-50);border-radius:var(--radius-lg);">
-                  <div style="display:flex;justify-content:space-between;margin-bottom:var(--space-2);">
-                    <span style="color:var(--color-text-secondary);font-size:var(--font-size-sm);">Distance</span>
-                    <strong>${this.routeResult.distance}</strong>
-                  </div>
-                  <div style="display:flex;justify-content:space-between;">
-                    <span style="color:var(--color-text-secondary);font-size:var(--font-size-sm);">Duration</span>
-                    <strong>${this.routeResult.duration}</strong>
-                  </div>
-                </div>
-                ` : ''}
+                <div id="cost-breakdown-container"></div>
               </div>
 
               <div class="card" style="padding:0;overflow:hidden;min-height:500px;">
@@ -82,8 +86,6 @@ export class RoutePlannerPage {
               </div>
             </div>
           </div>
-
-          <div id="cost-breakdown-container" class="route-planner-layout__sidebar"></div>
         </div>
       </div>
     `;
@@ -143,9 +145,10 @@ export class RoutePlannerPage {
     if (!apiClient.isAuthenticated()) return;
 
     try {
-      const response = await apiClient.get<VehicleProfileResponse[]>('/vehicles');
-      if (response.data && this.costBreakdownPanel) {
-        this.costBreakdownPanel.setVehicleProfiles(response.data);
+      const response = await apiClient.get<{ data: VehicleProfileResponse[] }>('/vehicles');
+      const profiles = response.data?.data ?? [];
+      if (this.costBreakdownPanel) {
+        this.costBreakdownPanel.setVehicleProfiles(profiles);
       }
     } catch {
       // Vehicle profiles unavailable — panel will show appropriate state
