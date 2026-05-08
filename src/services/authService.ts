@@ -44,8 +44,8 @@ export async function login(
     throw error;
   }
 
-  // Check if email is confirmed
-  if (!(user as any).email_confirmed) {
+  // Check if email is confirmed (skip check if field not present — for backward compat)
+  if (user.email_confirmed === false) {
     const error = new Error('Please confirm your email address before logging in. Check your inbox for the confirmation link.') as Error & { statusCode: number };
     error.statusCode = 403;
     throw error;
