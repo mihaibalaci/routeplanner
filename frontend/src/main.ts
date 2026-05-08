@@ -8,6 +8,7 @@ import { VignetteCostPage } from './pages/VignetteCostPage';
 import { RefuelAdvisorPage } from './pages/RefuelAdvisorPage';
 import { ExportPage } from './pages/ExportPage';
 import { HistoryPage } from './pages/HistoryPage';
+import { FuelCalculatorPage } from './pages/FuelCalculatorPage';
 
 // Declare MDL's componentHandler on window
 declare global {
@@ -58,7 +59,7 @@ class App {
     if (!content) return;
 
     // Check authentication for protected routes
-    if (path !== '/login' && path !== '/register' && !apiClient.isAuthenticated()) {
+    if (path !== '/login' && path !== '/register' && path !== '/calculator' && !apiClient.isAuthenticated()) {
       new LoginPage(content).render();
       return;
     }
@@ -91,6 +92,10 @@ class App {
       case '/history':
         content.innerHTML = '';
         new HistoryPage(content).render();
+        break;
+      case '/calculator':
+        content.innerHTML = '';
+        new FuelCalculatorPage(content).render();
         break;
       case '/login':
         new LoginPage(content).render();

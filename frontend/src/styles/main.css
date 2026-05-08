@@ -566,3 +566,109 @@ html, body {
     transform: translateX(-50%) translateY(0);
   }
 }
+
+/* ─── Fuel Calculator ──────────────────────────────────────────────────────── */
+
+.fuel-calc-page {
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.fuel-calc-card {
+  width: 100%;
+}
+
+.fuel-calc-subtitle {
+  color: #666;
+  margin-bottom: 16px;
+}
+
+.fuel-calc-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.fuel-calc-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fuel-calc-options {
+  margin: 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fuel-calc-actions {
+  margin-top: 16px;
+}
+
+.fuel-calc-results {
+  margin-top: 24px;
+  padding: 20px;
+  background: #e8f5e9;
+  border-radius: 8px;
+}
+
+.fuel-calc-results__title {
+  margin: 0 0 16px 0;
+  color: #2e7d32;
+  display: flex;
+  align-items: center;
+}
+
+.fuel-calc-results__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.fuel-calc-result-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fuel-calc-result-item--primary {
+  grid-column: span 2;
+  text-align: center;
+  padding: 12px;
+  background: #fff;
+  border-radius: 8px;
+}
+
+.fuel-calc-result-item--primary .fuel-calc-result-value {
+  font-size: 2em;
+  color: #2e7d32;
+}
+
+.fuel-calc-result-label {
+  font-size: 0.85em;
+  color: #666;
+  text-transform: uppercase;
+}
+
+.fuel-calc-result-value {
+  font-size: 1.2em;
+  font-weight: 600;
+}
+
+.fuel-calc-results__actions {
+  margin-top: 16px;
+  text-align: right;
+}
+
+@media (max-width: 600px) {
+  .fuel-calc-toggle {
+    flex-direction: column;
+  }
+  .fuel-calc-results__grid {
+    grid-template-columns: 1fr;
+  }
+  .fuel-calc-result-item--primary {
+    grid-column: span 1;
+  }
+}
