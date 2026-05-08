@@ -30,6 +30,12 @@ export function authMiddleware(
   // Check if the path is public (strip /api/v1 prefix for matching)
   const path = req.path.replace(/^\/api\/v1/, '');
 
+  // Skip auth for non-API paths (frontend static files, SPA routes)
+  if (!req.path.startsWith('/api/')) {
+    next();
+    return;
+  }
+
   if (PUBLIC_PATHS.some((p) => path.startsWith(p))) {
     next();
     return;

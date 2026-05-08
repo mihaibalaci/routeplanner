@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import path from 'path';
 import {
   requestIdMiddleware,
   authMiddleware,
@@ -64,6 +65,19 @@ app.use('/api/v1/trips', tripsRouter);
 app.use('/api/v1/refuel', refuelRouter);
 app.use('/api/v1/vignettes', vignettesRouter);
 app.use('/api/v1/users', usersRouter);
+
+// Serve frontend static files (production)
+const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
+app.use(express.static(frontendDist));
+
+// SPA fallback: serve index.html for any non-API route
+app.get('*', (req, res, next) => {
+  // Don't intercept API routes or health check
+  if (req.path.startsWith('/api/') || req.path === '/health') {
+    return next();
+  }
+  res.sendFile(path.join(frontendDist, 'index.html'));
+});
 
 // Error handler (must be last)
 app.use(errorHandler);
