@@ -252,7 +252,7 @@ async function calculateFuelBreakdown(
   // Fetch fuel prices for all countries
   const fuelPrices = new Map<string, FuelPrice | null>();
   for (const countryCode of countryOrder) {
-    const price = await getPrice(countryCode, vehicle.fuel_type);
+    const price = vehicle.fuel_type ? await getPrice(countryCode, vehicle.fuel_type) : null;
     fuelPrices.set(countryCode, price);
   }
 
@@ -303,7 +303,7 @@ async function calculateFuelBreakdown(
 
     // Calculate fuel cost: (distance / 100) × consumption × price_per_liter
     const fuelCostEur = Math.round(
-      (distanceKm / 100) * vehicle.consumption_per_100km * price.price_per_liter_eur * 100
+      (distanceKm / 100) * (vehicle.consumption_per_100km ?? 0) * price.price_per_liter_eur * 100
     ) / 100;
 
     totalFuelCost += fuelCostEur;

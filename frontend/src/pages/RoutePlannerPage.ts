@@ -4,7 +4,9 @@
 import { loadGoogleMaps, isMapsAvailable, createMap } from '../services/mapService';
 import { apiClient } from '../api/client';
 import { CostBreakdownPanel } from '../components/CostBreakdownPanel';
-import type { VehicleProfileResponse } from '../components/VehicleSelector';
+import { ChargingStationLayer } from '../components/ChargingStationLayer';
+import { VehicleListComponent, type VehicleProfileResponse } from '../components/VehicleListComponent';
+import { VehicleDetailPanel } from '../components/VehicleDetailPanel';
 
 export class RoutePlannerPage {
   private container: HTMLElement;
@@ -13,6 +15,12 @@ export class RoutePlannerPage {
   private error: string | null = null;
   private routeResult: { distance: string; duration: string } | null = null;
   private costBreakdownPanel: CostBreakdownPanel | null = null;
+  private vehicleListComponent: VehicleListComponent | null = null;
+  private vehicleDetailPanel: VehicleDetailPanel | null = null;
+  private chargingStationLayer: ChargingStationLayer | null = null;
+  private selectedVehicleType: string | null = null;
+  private routeBounds: google.maps.LatLngBounds | null = null;
+  private vehicleProfiles: VehicleProfileResponse[] = [];
   private mediaQuery: MediaQueryList | null = null;
   private mediaQueryHandler: ((e: MediaQueryListEvent) => void) | null = null;
 
@@ -24,7 +32,9 @@ export class RoutePlannerPage {
     this.container.innerHTML = this.build();
     this.bindEvents();
     this.initMap();
+    this.initVehicleList();
     this.initCostBreakdownPanel();
+    this.initVehicleDetailPanel();
     this.initResponsiveLayout();
   }
 
@@ -78,6 +88,7 @@ export class RoutePlannerPage {
                   ` : ''}
                 </div>
 
+                <div id="vehicle-list-container"></div>
                 <div id="cost-breakdown-container"></div>
               </div>
 
@@ -87,6 +98,8 @@ export class RoutePlannerPage {
             </div>
           </div>
         </div>
+
+        <div id="vehicle-detail-container"></div>
       </div>
     `;
   }
@@ -96,15 +109,68 @@ export class RoutePlannerPage {
     this.container.querySelector('#btn-calculate')?.addEventListener('click', () => this.calculateRoute());
   }
 
+  private initVehicleList(): void {
+    const listContainer = this.container.querySelector('#vehicle-list-container') as HTMLElement;
+    if (!listContainer) return;
+
+    this.vehicleListComponent = new VehicleListComponent({
+      container: listContainer,
+      onSelect: (vehicleId: string) => this.handleVehicleChange(vehicleId),
+    });
+
+    this.loadVehicleProfiles();
+  }
+
   private initCostBreakdownPanel(): void {
     const panelContainer = this.container.querySelector('#cost-breakdown-container') as HTMLElement;
     if (!panelContainer) return;
 
     this.costBreakdownPanel = new CostBreakdownPanel({
       container: panelContainer,
+      onVehicleChange: (vehicleId: string) => this.handleVehicleChange(vehicleId),
     });
+  }
 
-    this.loadVehicleProfiles();
+  private initVehicleDetailPanel(): void {
+    const detailContainer = this.container.querySelector('#vehicle-detail-container') as HTMLElement;
+    if (!detailContainer) return;
+
+    this.vehicleDetailPanel = new VehicleDetailPanel({
+      container: detailContainer,
+      onClose: () => {
+        // Panel closed — no additional action needed
+      },
+    });
+  }
+
+  private handleVehicleChange(vehicleId: string): void {
+    const profile = this.vehicleProfiles.find((p) => p.id === vehicleId);
+    this.selectedVehicleType = profile?.vehicle_type ?? null;
+
+    // Open the detail panel for the selected vehicle
+    if (profile && this.vehicleDetailPanel) {
+      this.vehicleDetailPanel.show(profile as any);
+    }
+
+    // Update charging station layer visibility based on vehicle type
+    this.updateChargingStationLayer();
+  }
+
+  private updateChargingStationLayer(): void {
+    if (!this.map) return;
+
+    if (this.selectedVehicleType === 'ev' && this.routeBounds) {
+      // Show charging stations for EV vehicles when a route is displayed
+      if (!this.chargingStationLayer) {
+        this.chargingStationLayer = new ChargingStationLayer({ map: this.map });
+      }
+      this.chargingStationLayer.show(this.routeBounds);
+    } else {
+      // Hide charging stations for non-EV vehicles
+      if (this.chargingStationLayer) {
+        this.chargingStationLayer.hide();
+      }
+    }
   }
 
   private initResponsiveLayout(): void {
@@ -147,11 +213,27 @@ export class RoutePlannerPage {
     try {
       const response = await apiClient.get<{ data: VehicleProfileResponse[] }>('/vehicles');
       const profiles = response.data?.data ?? [];
+      this.vehicleProfiles = profiles;
+
+      // Update the vehicle list component
+      if (this.vehicleListComponent) {
+        this.vehicleListComponent.setProfiles(profiles);
+      }
+
+      // Also pass profiles to cost breakdown panel for backward compatibility
       if (this.costBreakdownPanel) {
         this.costBreakdownPanel.setVehicleProfiles(profiles);
       }
+
+      // If a default vehicle is auto-selected by the list component, trigger change
+      if (this.vehicleListComponent) {
+        const selectedId = this.vehicleListComponent.getSelectedId();
+        if (selectedId) {
+          this.handleVehicleChange(selectedId);
+        }
+      }
     } catch {
-      // Vehicle profiles unavailable — panel will show appropriate state
+      // Vehicle profiles unavailable — components will show appropriate state
     }
   }
 
@@ -278,8 +360,17 @@ export class RoutePlannerPage {
             distance: `${(totalDistance / 1000).toFixed(1)} km`,
             duration: this.formatDuration(totalDuration),
           };
+
+          // Store route bounds for charging station layer
+          if (result.routes[0].bounds) {
+            this.routeBounds = result.routes[0].bounds;
+          }
+
           this.updateResultsUI();
           this.saveRouteToBackend(result);
+
+          // Update charging station layer after route is calculated
+          this.updateChargingStationLayer();
         } else {
           this.error = `Route calculation failed: ${status}`;
           this.updateResultsUI();
@@ -406,10 +497,23 @@ export class RoutePlannerPage {
 
   private rerender(): void {
     this.destroyResponsiveLayout();
+    if (this.vehicleListComponent) {
+      this.vehicleListComponent.destroy();
+      this.vehicleListComponent = null;
+    }
+    if (this.vehicleDetailPanel) {
+      this.vehicleDetailPanel.hide();
+    }
+    if (this.chargingStationLayer) {
+      this.chargingStationLayer.destroy();
+      this.chargingStationLayer = null;
+    }
     this.container.innerHTML = this.build();
     this.bindEvents();
     this.initMap();
+    this.initVehicleList();
     this.initCostBreakdownPanel();
+    this.initVehicleDetailPanel();
     this.initResponsiveLayout();
   }
 }

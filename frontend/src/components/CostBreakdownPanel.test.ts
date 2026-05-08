@@ -630,4 +630,158 @@ describe('CostBreakdownPanel state transitions', () => {
       expect(panel.getCostData()).toBeNull();
     });
   });
+
+  // ─── Requirements 9.3, 9.4: EV vehicle cost breakdown ──────────────────────
+
+  describe('EV vehicle cost breakdown', () => {
+    const mockEvCostData: CostBreakdownData = {
+      totalCostEur: 40.0,
+      isPartialEstimate: false,
+      fuel: {
+        totalFuelCostEur: 0,
+        breakdown: [
+          {
+            countryCode: 'DE',
+            countryName: 'Germany',
+            distanceKm: 300,
+            fuelPricePerLiter: 0,
+            fuelCostEur: 0,
+          },
+          {
+            countryCode: 'AT',
+            countryName: 'Austria',
+            distanceKm: 200,
+            fuelPricePerLiter: 0,
+            fuelCostEur: 0,
+          },
+        ],
+      },
+      roadCosts: {
+        vignettes: [
+          {
+            countryCode: 'AT',
+            countryName: 'Austria',
+            duration: '10-day',
+            cost: 40.0,
+            availableDurations: ['10-day', '1-month', '1-year'],
+          },
+        ],
+        bridgeTolls: [],
+        highwayTolls: [],
+        totalRoadCostsEur: 40.0,
+      },
+      vehicleProfile: {
+        id: 'ev1',
+        name: 'Tesla Model 3',
+        fuelType: 'electric' as any,
+        consumptionPer100km: 0,
+      },
+    };
+
+    async function loadPanelWithEvVehicle(data: CostBreakdownData) {
+      vi.mocked(apiClient.get).mockResolvedValue({ data, status: 200 });
+
+      panel = new CostBreakdownPanel({ container });
+
+      panel.setVehicleProfiles([
+        {
+          id: 'ev1',
+          name: 'Tesla Model 3',
+          vehicle_type: 'ev',
+          fuel_type: 'electric',
+          tank_capacity_liters: null,
+          consumption_per_100km: null,
+          battery_capacity_kwh: 75,
+          consumption_kwh_per_100km: 15,
+          charge_port_type: 'CCS',
+          is_default: true,
+        },
+      ]);
+      const select = container.querySelector('select') as HTMLSelectElement;
+      if (select) {
+        select.value = 'ev1';
+        select.dispatchEvent(new Event('change'));
+      }
+
+      panel.setRouteCalculating();
+      panel.setRouteResult('route-ev');
+
+      await vi.waitFor(() => {
+        expect(panel.getState()).toBe('loaded');
+      });
+    }
+
+    it('shows energy section instead of fuel section for EV vehicles', async () => {
+      await loadPanelWithEvVehicle(mockEvCostData);
+
+      const fuelSection = container.querySelector('.cost-breakdown-panel__fuel-section');
+      const energySection = container.querySelector('.cost-breakdown-panel__energy-section');
+
+      expect(fuelSection).toBeNull();
+      expect(energySection).not.toBeNull();
+    });
+
+    it('displays energy consumption per country segment', async () => {
+      await loadPanelWithEvVehicle(mockEvCostData);
+
+      const energyRows = container.querySelectorAll('.cost-breakdown-panel__energy-row');
+      expect(energyRows.length).toBe(2);
+
+      // Germany: 300 km at 15 kWh/100km = 45 kWh
+      const firstRow = energyRows[0];
+      expect(firstRow.querySelector('.cost-breakdown-panel__country-name')!.textContent).toBe('Germany');
+      expect(firstRow.querySelector('.cost-breakdown-panel__distance')!.textContent).toBe('300 km');
+      expect(firstRow.querySelector('.cost-breakdown-panel__energy')!.textContent).toBe('45.00 kWh');
+
+      // Austria: 200 km at 15 kWh/100km = 30 kWh
+      const secondRow = energyRows[1];
+      expect(secondRow.querySelector('.cost-breakdown-panel__country-name')!.textContent).toBe('Austria');
+      expect(secondRow.querySelector('.cost-breakdown-panel__distance')!.textContent).toBe('200 km');
+      expect(secondRow.querySelector('.cost-breakdown-panel__energy')!.textContent).toBe('30.00 kWh');
+    });
+
+    it('displays total energy consumption in section header', async () => {
+      await loadPanelWithEvVehicle(mockEvCostData);
+
+      const sectionTitle = container.querySelector('.cost-breakdown-panel__energy-section .cost-breakdown-panel__section-title');
+      expect(sectionTitle).not.toBeNull();
+      // Total: (300 + 200) / 100 * 15 = 75 kWh
+      expect(sectionTitle!.textContent).toContain('75.00 kWh');
+    });
+
+    it('still shows road costs section for EV vehicles', async () => {
+      await loadPanelWithEvVehicle(mockEvCostData);
+
+      const roadCostsSection = container.querySelector('.cost-breakdown-panel__road-costs-section');
+      expect(roadCostsSection).not.toBeNull();
+    });
+
+    it('shows fuel section for ICE vehicles (backward compatibility)', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({ data: createMockCostData(), status: 200 });
+
+      panel = new CostBreakdownPanel({ container });
+
+      panel.setVehicleProfiles([
+        { id: 'v1', name: 'My Car', vehicle_type: 'car', fuel_type: 'diesel', tank_capacity_liters: 50, consumption_per_100km: 6.5 },
+      ]);
+      const select = container.querySelector('select') as HTMLSelectElement;
+      if (select) {
+        select.value = 'v1';
+        select.dispatchEvent(new Event('change'));
+      }
+
+      panel.setRouteCalculating();
+      panel.setRouteResult('route-ice');
+
+      await vi.waitFor(() => {
+        expect(panel.getState()).toBe('loaded');
+      });
+
+      const fuelSection = container.querySelector('.cost-breakdown-panel__fuel-section');
+      const energySection = container.querySelector('.cost-breakdown-panel__energy-section');
+
+      expect(fuelSection).not.toBeNull();
+      expect(energySection).toBeNull();
+    });
+  });
 });

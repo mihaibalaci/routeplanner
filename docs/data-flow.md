@@ -108,3 +108,57 @@ sequenceDiagram
     API->>API: Sum per-country costs by selected duration
     API-->>U: 200 {totalVignetteCostEur, countryBreakdown}
 ```
+
+## EV Vehicle Profile & Charging Stations
+
+```mermaid
+sequenceDiagram
+    participant U as User (Browser)
+    participant API as Express API
+    participant DB as PostgreSQL
+    participant CM as ChargeMap API
+
+    U->>API: POST /vehicles {name, vehicle_type:"ev", battery_capacity_kwh, consumption_kwh_per_100km, charge_port_type}
+    API->>API: Validate EV fields (battery 10-200, consumption 5-50, port type enum)
+    API->>DB: INSERT vehicle_profile (EV fields, fuel_type=electric, tank=NULL)
+    API-->>U: 201 {vehicle profile with EV fields}
+
+    U->>API: PUT /vehicles/:id/default
+    API->>DB: BEGIN TRANSACTION
+    API->>DB: UPDATE vehicle_profiles SET is_default=false WHERE user_id=X
+    API->>DB: UPDATE vehicle_profiles SET is_default=true WHERE id=Y
+    API->>DB: COMMIT
+    API-->>U: 200 {vehicle with is_default=true}
+
+    Note over U,CM: When EV vehicle selected + route displayed
+    U->>API: GET /charging-stations?north=X&south=X&east=X&west=X
+    API->>CM: GET /v1/stations?bbox params
+    alt API available
+        CM-->>API: Station data (id, name, lat, lng, connectors, availability)
+        API-->>U: 200 {stations[]}
+    else API unavailable
+        CM-->>API: Error/timeout
+        API-->>U: 200 {stations: []}
+        Note over U: Frontend falls back to ChargeMap iframe widget
+    end
+```
+
+## EV Cost Breakdown (Energy vs Fuel)
+
+```mermaid
+sequenceDiagram
+    participant U as User (Browser)
+    participant FE as Frontend
+    participant API as Express API
+
+    U->>FE: Select EV vehicle from list
+    FE->>FE: Detect vehicle_type === 'ev'
+    FE->>FE: Show ChargingStationLayer on map
+    FE->>API: GET /cost-breakdown/:routeId?vehicleId=ev1
+    API-->>FE: {totalCostEur, fuel:{breakdown by country}, roadCosts}
+
+    FE->>FE: Render Energy section (not Fuel)
+    FE->>FE: Calculate: (distanceKm / 100) × consumption_kwh_per_100km
+    FE->>FE: Display kWh per country segment
+    FE->>FE: Display road costs (vignettes, tolls) as normal
+```

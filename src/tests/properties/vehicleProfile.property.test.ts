@@ -3,10 +3,15 @@ import fc from 'fast-check';
 import {
   VALID_VEHICLE_TYPES,
   VALID_FUEL_TYPES,
+  VALID_CHARGE_PORT_TYPES,
   TANK_CAPACITY_MIN,
   TANK_CAPACITY_MAX,
   CONSUMPTION_MIN,
   CONSUMPTION_MAX,
+  BATTERY_CAPACITY_MIN,
+  BATTERY_CAPACITY_MAX,
+  CONSUMPTION_KWH_MIN,
+  CONSUMPTION_KWH_MAX,
 } from '../../models/vehicleProfile';
 
 // ─── In-memory store for testing ──────────────────────────────────────────────
@@ -40,6 +45,10 @@ const mockQueryFn = async (text: string, params?: unknown[]) => {
       fuel_type: params![3],
       tank_capacity_liters: params![4],
       consumption_per_100km: params![5],
+      battery_capacity_kwh: params![6] ?? null,
+      consumption_kwh_per_100km: params![7] ?? null,
+      charge_port_type: params![8] ?? null,
+      is_default: false,
       created_at: new Date(),
       updated_at: new Date(),
     };
@@ -74,11 +83,22 @@ vi.mock('../../utils/database', () => ({
 
 // ─── Arbitraries ──────────────────────────────────────────────────────────────
 
+/** ICE vehicle types only (no 'ev') */
+const iceVehicleTypes = VALID_VEHICLE_TYPES.filter((t) => t !== 'ev');
+const iceVehicleTypeArb = fc.constantFrom(...iceVehicleTypes);
+
+/** ICE fuel types only (no 'electric') */
+const iceFuelTypes = VALID_FUEL_TYPES.filter((t) => t !== 'electric');
+const iceFuelTypeArb = fc.constantFrom(...iceFuelTypes);
+
 /** Generate a valid vehicle type */
 const vehicleTypeArb = fc.constantFrom(...VALID_VEHICLE_TYPES);
 
 /** Generate a valid fuel type */
 const fuelTypeArb = fc.constantFrom(...VALID_FUEL_TYPES);
+
+/** Generate a valid charge port type */
+const chargePortTypeArb = fc.constantFrom(...VALID_CHARGE_PORT_TYPES);
 
 /** Generate a valid tank capacity in [5, 200] */
 const validTankCapacityArb = fc.double({
@@ -96,19 +116,48 @@ const validConsumptionArb = fc.double({
   noDefaultInfinity: true,
 });
 
+/** Generate a valid battery capacity in [10, 200] */
+const validBatteryCapacityArb = fc.double({
+  min: BATTERY_CAPACITY_MIN,
+  max: BATTERY_CAPACITY_MAX,
+  noNaN: true,
+  noDefaultInfinity: true,
+});
+
+/** Generate a valid EV consumption in [5, 50] */
+const validConsumptionKwhArb = fc.double({
+  min: CONSUMPTION_KWH_MIN,
+  max: CONSUMPTION_KWH_MAX,
+  noNaN: true,
+  noDefaultInfinity: true,
+});
+
 /** Generate a valid non-whitespace-only name */
 const validNameArb = fc
   .string({ minLength: 1, maxLength: 50 })
   .filter((s) => s.trim().length > 0);
 
-/** Generate a valid vehicle profile input */
-const validProfileInputArb = fc.record({
+/** Generate a valid ICE vehicle profile input */
+const validIceProfileInputArb = fc.record({
   name: validNameArb,
-  vehicle_type: vehicleTypeArb,
-  fuel_type: fuelTypeArb,
+  vehicle_type: iceVehicleTypeArb,
+  fuel_type: iceFuelTypeArb,
   tank_capacity_liters: validTankCapacityArb,
   consumption_per_100km: validConsumptionArb,
 });
+
+/** Generate a valid EV vehicle profile input */
+const validEvProfileInputArb = fc.record({
+  name: validNameArb,
+  vehicle_type: fc.constant('ev' as const),
+  fuel_type: fc.constant('electric' as const),
+  battery_capacity_kwh: validBatteryCapacityArb,
+  consumption_kwh_per_100km: validConsumptionKwhArb,
+  charge_port_type: chargePortTypeArb,
+});
+
+/** Generate a valid vehicle profile input (either ICE or EV) */
+const validProfileInputArb = fc.oneof(validIceProfileInputArb, validEvProfileInputArb);
 
 /** Generate a tank capacity outside [5, 200] */
 const invalidTankCapacityArb = fc.oneof(
@@ -157,9 +206,17 @@ describe('Property 8: Vehicle Profile Round-Trip', () => {
         expect(retrieved!.user_id).toBe(userId);
         expect(retrieved!.name).toBe(input.name.trim());
         expect(retrieved!.vehicle_type).toBe(input.vehicle_type);
-        expect(retrieved!.fuel_type).toBe(input.fuel_type);
-        expect(retrieved!.tank_capacity_liters).toBe(input.tank_capacity_liters);
-        expect(retrieved!.consumption_per_100km).toBe(input.consumption_per_100km);
+
+        if (input.vehicle_type === 'ev') {
+          expect(retrieved!.fuel_type).toBe(input.fuel_type || 'electric');
+          expect(retrieved!.battery_capacity_kwh).toBe(input.battery_capacity_kwh);
+          expect(retrieved!.consumption_kwh_per_100km).toBe(input.consumption_kwh_per_100km);
+          expect(retrieved!.charge_port_type).toBe(input.charge_port_type);
+        } else {
+          expect(retrieved!.fuel_type).toBe(input.fuel_type);
+          expect(retrieved!.tank_capacity_liters).toBe(input.tank_capacity_liters);
+          expect(retrieved!.consumption_per_100km).toBe(input.consumption_per_100km);
+        }
       }),
       { numRuns: 10 }
     );
@@ -198,8 +255,8 @@ describe('Property 9: Vehicle Profile Validation Boundaries', () => {
     await fc.assert(
       fc.asyncProperty(
         invalidTankCapacityArb,
-        fuelTypeArb,
-        vehicleTypeArb,
+        iceFuelTypeArb,
+        iceVehicleTypeArb,
         validConsumptionArb,
         async (tankCapacity, fuelType, vehicleType, consumption) => {
           const input = {
@@ -231,8 +288,8 @@ describe('Property 9: Vehicle Profile Validation Boundaries', () => {
     await fc.assert(
       fc.asyncProperty(
         invalidConsumptionArb,
-        fuelTypeArb,
-        vehicleTypeArb,
+        iceFuelTypeArb,
+        iceVehicleTypeArb,
         validTankCapacityArb,
         async (consumption, fuelType, vehicleType, tankCapacity) => {
           const input = {

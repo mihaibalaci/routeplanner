@@ -121,7 +121,7 @@ export interface CostBreakdownData {
   vehicleProfile: {
     id: string;
     name: string;
-    fuelType: string;
-    consumptionPer100km: number;
+    fuelType: string | null;
+    consumptionPer100km: number | null;
   };
 }

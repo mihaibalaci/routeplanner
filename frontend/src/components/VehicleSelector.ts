@@ -13,9 +13,13 @@ export interface VehicleProfileResponse {
   id: string;
   name: string;
   vehicle_type: string;
-  fuel_type: string;
-  tank_capacity_liters: number;
-  consumption_per_100km: number;
+  fuel_type: string | null;
+  tank_capacity_liters: number | null;
+  consumption_per_100km: number | null;
+  battery_capacity_kwh?: number | null;
+  consumption_kwh_per_100km?: number | null;
+  charge_port_type?: string | null;
+  is_default?: boolean;
 }
 
 export interface VehicleSelectorOptions {

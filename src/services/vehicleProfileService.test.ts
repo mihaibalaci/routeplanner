@@ -50,7 +50,7 @@ describe('validateVehicleProfileInput', () => {
   });
 
   it('rejects invalid fuel_type', () => {
-    const result = validateVehicleProfileInput({ ...validInput, fuel_type: 'electric' });
+    const result = validateVehicleProfileInput({ ...validInput, fuel_type: 'hydrogen' });
     expect(result.valid).toBe(false);
     if (!result.valid) {
       expect(result.errors[0]).toContain('Fuel type must be one of');

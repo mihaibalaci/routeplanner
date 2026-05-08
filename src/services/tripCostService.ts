@@ -75,7 +75,7 @@ export function computeTripCost(
   let pricesOutdated = false;
 
   for (const segment of segments) {
-    const fuelNeeded = (segment.distance_km / 100) * vehicle.consumption_per_100km;
+    const fuelNeeded = (segment.distance_km / 100) * (vehicle.consumption_per_100km ?? 0);
     const priceKey = `${segment.country_code}:${vehicle.fuel_type}`;
     const fuelPrice = fuelPrices.get(priceKey);
 
@@ -167,9 +167,11 @@ export async function calculateTripCost(
   // Fetch fuel prices for all needed country/fuel_type combinations
   const fuelPrices = new Map<string, FuelPrice>();
   for (const countryCode of countryCodes) {
-    const price = await getPrice(countryCode, vehicle.fuel_type);
-    if (price) {
-      fuelPrices.set(`${countryCode}:${vehicle.fuel_type}`, price);
+    if (vehicle.fuel_type) {
+      const price = await getPrice(countryCode, vehicle.fuel_type);
+      if (price) {
+        fuelPrices.set(`${countryCode}:${vehicle.fuel_type}`, price);
+      }
     }
   }
 

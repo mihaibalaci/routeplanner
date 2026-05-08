@@ -37,6 +37,8 @@ export class CostBreakdownPanel {
   private routeId: string | null = null;
   private durationOverrides: Record<string, VignetteDuration> = {};
 
+  private selectedVehicleProfile: VehicleProfileResponse | null = null;
+  private vehicleProfiles: VehicleProfileResponse[] = [];
   private vehicleSelector: VehicleSelector | null = null;
   private vehicleSelectorContainer: HTMLElement | null = null;
   private abortController: AbortController | null = null;
@@ -101,6 +103,7 @@ export class CostBreakdownPanel {
    * Set available vehicle profiles for the VehicleSelector sub-component.
    */
   setVehicleProfiles(profiles: VehicleProfileResponse[]): void {
+    this.vehicleProfiles = profiles;
     if (this.vehicleSelector) {
       this.vehicleSelector.setProfiles(profiles);
     }
@@ -156,6 +159,13 @@ export class CostBreakdownPanel {
   }
 
   /**
+   * Get the currently selected vehicle profile (for testing/integration).
+   */
+  getSelectedVehicleProfile(): VehicleProfileResponse | null {
+    return this.selectedVehicleProfile;
+  }
+
+  /**
    * Clean up resources and remove DOM content.
    */
   destroy(): void {
@@ -195,6 +205,7 @@ export class CostBreakdownPanel {
 
   private handleVehicleChange(vehicleId: string): void {
     this.selectedVehicleId = vehicleId;
+    this.selectedVehicleProfile = this.vehicleProfiles.find(p => p.id === vehicleId) || null;
     this.onVehicleChange?.(vehicleId);
 
     if (this.routeId) {
@@ -392,7 +403,7 @@ export class CostBreakdownPanel {
         </button>
       </div>
       <div class="cost-breakdown-panel__details">
-        ${this.renderFuelSection()}
+        ${this.isSelectedVehicleEv() ? this.renderEnergySection() : this.renderFuelSection()}
         ${this.renderRoadCostsSection()}
       </div>
     `;
@@ -435,6 +446,61 @@ export class CostBreakdownPanel {
         <h4 class="cost-breakdown-panel__section-title">
           Fuel
           <span class="cost-breakdown-panel__section-total">${formatEur(fuel.totalFuelCostEur)}</span>
+        </h4>
+        <table class="cost-breakdown-panel__breakdown-table">
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      </section>
+    `;
+  }
+
+  /**
+   * Check if the currently selected vehicle is an EV.
+   */
+  private isSelectedVehicleEv(): boolean {
+    return this.selectedVehicleProfile?.vehicle_type === 'ev';
+  }
+
+  /**
+   * Render energy consumption section for EV vehicles.
+   * Shows kWh consumed based on total route distance and consumption_kwh_per_100km.
+   */
+  private renderEnergySection(): string {
+    if (!this.costData || !this.selectedVehicleProfile) return '';
+
+    const consumptionKwhPer100km = this.selectedVehicleProfile.consumption_kwh_per_100km;
+    if (!consumptionKwhPer100km) return '';
+
+    // Calculate total distance from fuel breakdown (reuse existing distance data)
+    const totalDistanceKm = this.costData.fuel.breakdown.reduce(
+      (sum, entry) => sum + entry.distanceKm,
+      0
+    );
+
+    // Calculate total energy consumed: (distance / 100) * consumption_kwh_per_100km
+    const totalEnergyKwh = (totalDistanceKm / 100) * consumptionKwhPer100km;
+    const totalEnergyRounded = Math.round(totalEnergyKwh * 100) / 100;
+
+    const rows = this.costData.fuel.breakdown
+      .map((entry) => {
+        const segmentEnergy = (entry.distanceKm / 100) * consumptionKwhPer100km;
+        const segmentEnergyRounded = Math.round(segmentEnergy * 100) / 100;
+        return `
+        <tr class="cost-breakdown-panel__energy-row">
+          <td class="cost-breakdown-panel__country-name">${entry.countryName}</td>
+          <td class="cost-breakdown-panel__distance">${Math.round(entry.distanceKm)} km</td>
+          <td class="cost-breakdown-panel__energy">${segmentEnergyRounded.toFixed(2)} kWh</td>
+        </tr>`;
+      })
+      .join('');
+
+    return `
+      <section class="cost-breakdown-panel__section cost-breakdown-panel__energy-section">
+        <h4 class="cost-breakdown-panel__section-title">
+          Energy
+          <span class="cost-breakdown-panel__section-total">${totalEnergyRounded.toFixed(2)} kWh</span>
         </h4>
         <table class="cost-breakdown-panel__breakdown-table">
           <tbody>

@@ -20,6 +20,8 @@ graph TB
         RA[Refuel Advisor]
         VS[Vignette Service]
         FPS[Fuel Price Service]
+        VPS[Vehicle Profile Service]
+        CMS[ChargeMap Service]
         ES[Email Service]
         EXP[Route Exporters]
     end
@@ -36,6 +38,7 @@ graph TB
         GPP[GlobalPetrolPrices]
         IVIG[i-vignette.com]
         VINT[vintrica.com]
+        CMAP[ChargeMap API]
     end
 
     subgraph "Background Jobs"
@@ -54,6 +57,8 @@ graph TB
     ROUTES --> RA
     ROUTES --> VS
     ROUTES --> FPS
+    ROUTES --> VPS
+    ROUTES --> CMS
     ROUTES --> EXP
 
     US --> PG
@@ -68,6 +73,9 @@ graph TB
     VS --> REDIS
     FPS --> PG
     FPS --> REDIS
+
+    VPS --> PG
+    CMS --> CMAP
 
     ES -->|SMTP| SMTP
     FPJ --> CIELO
@@ -88,5 +96,32 @@ graph TB
 | API → PostgreSQL | TCP (pg) | 5432 |
 | API → Redis | TCP (redis) | 6379 |
 | API → Google Maps | HTTPS | 443 |
+| API → ChargeMap | HTTPS | 443 |
 | Email Service → SMTP | SMTP/TLS | 587/465 |
 | Scrapers → External Sites | HTTPS | 443 |
+
+## Frontend Components
+
+```mermaid
+graph TB
+    subgraph "Route Planner Page"
+        RPP[RoutePlannerPage]
+        VLC[VehicleListComponent]
+        VDP[VehicleDetailPanel]
+        CBP[CostBreakdownPanel]
+        CSL[ChargingStationLayer]
+        MAP[Google Maps Instance]
+    end
+
+    RPP --> VLC
+    RPP --> VDP
+    RPP --> CBP
+    RPP --> CSL
+    RPP --> MAP
+    VLC -->|onSelect| RPP
+    RPP -->|show/hide| CSL
+    RPP -->|show vehicle| VDP
+    CSL --> MAP
+```
+
+The `VehicleListComponent` replaces the previous dropdown-based `VehicleSelector` with a card-based grid. When an EV vehicle is selected and a route is displayed, the `ChargingStationLayer` fetches and displays charging stations on the map. The `CostBreakdownPanel` shows energy consumption (kWh) for EV vehicles instead of fuel costs.

@@ -38,6 +38,45 @@ vi.mock('../components/CostBreakdownPanel', () => ({
   })),
 }));
 
+// Mock VehicleListComponent
+const mockVehicleListSetProfiles = vi.fn();
+const mockVehicleListGetSelectedId = vi.fn().mockReturnValue(null);
+const mockVehicleListDestroy = vi.fn();
+const mockVehicleListRender = vi.fn();
+
+vi.mock('../components/VehicleListComponent', () => ({
+  VehicleListComponent: vi.fn().mockImplementation(() => ({
+    setProfiles: mockVehicleListSetProfiles,
+    getSelectedId: mockVehicleListGetSelectedId,
+    destroy: mockVehicleListDestroy,
+    render: mockVehicleListRender,
+  })),
+}));
+
+// Mock VehicleDetailPanel
+const mockVehicleDetailShow = vi.fn();
+const mockVehicleDetailHide = vi.fn();
+
+vi.mock('../components/VehicleDetailPanel', () => ({
+  VehicleDetailPanel: vi.fn().mockImplementation(() => ({
+    show: mockVehicleDetailShow,
+    hide: mockVehicleDetailHide,
+  })),
+}));
+
+// Mock ChargingStationLayer
+const mockChargingStationShow = vi.fn();
+const mockChargingStationHide = vi.fn();
+const mockChargingStationDestroy = vi.fn();
+
+vi.mock('../components/ChargingStationLayer', () => ({
+  ChargingStationLayer: vi.fn().mockImplementation(() => ({
+    show: mockChargingStationShow,
+    hide: mockChargingStationHide,
+    destroy: mockChargingStationDestroy,
+  })),
+}));
+
 import { apiClient } from '../api/client';
 import { isMapsAvailable } from '../services/mapService';
 import { CostBreakdownPanel } from '../components/CostBreakdownPanel';
@@ -79,6 +118,16 @@ describe('RoutePlannerPage integration with CostBreakdownPanel', () => {
     mockDestroy.mockClear();
     mockRender.mockClear();
     vi.mocked(CostBreakdownPanel).mockClear();
+    mockVehicleListSetProfiles.mockClear();
+    mockVehicleListGetSelectedId.mockClear();
+    mockVehicleListGetSelectedId.mockReturnValue(null);
+    mockVehicleListDestroy.mockClear();
+    mockVehicleListRender.mockClear();
+    mockVehicleDetailShow.mockClear();
+    mockVehicleDetailHide.mockClear();
+    mockChargingStationShow.mockClear();
+    mockChargingStationHide.mockClear();
+    mockChargingStationDestroy.mockClear();
   });
 
   afterEach(() => {
@@ -120,7 +169,7 @@ describe('RoutePlannerPage integration with CostBreakdownPanel', () => {
       ];
 
       vi.mocked(apiClient.get).mockResolvedValue({
-        data: mockProfiles,
+        data: { data: mockProfiles },
         status: 200,
       });
 

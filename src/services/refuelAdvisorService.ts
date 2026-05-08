@@ -26,7 +26,7 @@ const MAX_ALTERNATIVES = 3;
  * Requirements: 8.1
  */
 export function calculateMaxRange(vehicle: VehicleProfile): number {
-  return (vehicle.tank_capacity_liters / vehicle.consumption_per_100km) * 100;
+  return ((vehicle.tank_capacity_liters ?? 0) / (vehicle.consumption_per_100km ?? 1)) * 100;
 }
 
 /**
@@ -197,14 +197,14 @@ export async function suggestRefuelStops(
       const { stations, searchRadiusKm } = await findStationsWithExpansion(
         searchLat,
         searchLng,
-        vehicle.fuel_type
+        vehicle.fuel_type ?? 'petrol_95'
       );
 
       if (stations.length > 0) {
         // Enrich stations with fuel prices
         const enrichedStations = await enrichStationsWithPrices(
           stations,
-          vehicle.fuel_type
+          vehicle.fuel_type ?? 'petrol_95'
         );
 
         // Rank by fuel price (lowest first)
