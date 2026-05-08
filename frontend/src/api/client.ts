@@ -120,14 +120,19 @@ class ApiClient {
 
     const response = await fetch(url, { ...options, headers });
 
-    // Handle 401 — attempt token refresh (once)
-    if (response.status === 401 && !isRetry && this.getRefreshToken()) {
-      const refreshed = await this.refreshToken();
-      if (refreshed) {
-        return this.request<T>(url, options, true);
+    // Handle 401 — token expired or invalid
+    if (response.status === 401 && !isRetry) {
+      // Try refresh if we have a refresh token
+      if (this.getRefreshToken()) {
+        const refreshed = await this.refreshToken();
+        if (refreshed) {
+          return this.request<T>(url, options, true);
+        }
       }
-      // Refresh failed — clear tokens and throw
+      // Clear stale tokens and redirect to login
       this.clearTokens();
+      window.history.pushState({}, '', '/login');
+      window.dispatchEvent(new CustomEvent('app:navigate', { detail: { path: '/login' } }));
       throw this.createApiError(401, 'Session expired. Please log in again.');
     }
 
