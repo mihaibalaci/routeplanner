@@ -31,7 +31,7 @@ class ApiClient {
   constructor() {
     this.baseUrl =
       (import.meta as unknown as { env?: { VITE_API_BASE_URL?: string } }).env
-        ?.VITE_API_BASE_URL || 'http://localhost:3000/api/v1';
+        ?.VITE_API_BASE_URL || '/api/v1';
   }
 
   // --- Token Management ---
