@@ -1,7 +1,7 @@
 /**
  * Cost Breakdown Service
- * Composes fuel cost and vignette cost into a single response.
- * Requirements: 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3, 4.5, 4.7, 5.1, 5.4, 7.2
+ * Composes fuel cost, vignette cost, and toll cost into a single response.
+ * Requirements: 1.1, 1.3, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 4.3, 6.1
  */
 
 import { getRoute } from './routeService';
@@ -11,49 +11,22 @@ import {
   getRouteVignetteRequirements,
   getPrices,
 } from './vignetteService';
-import { RouteSegment } from '../models/route';
+import { getTollsForRoute } from './tollService';
+import { RouteSegment, LatLng } from '../models/route';
 import { VehicleProfile } from '../models/vehicleProfile';
 import { VignetteDuration, DURATION_ORDER } from '../models/vignette';
+import {
+  VignetteEntry,
+  BridgeTollEntry,
+  HighwayTollEntry,
+  RoadCosts,
+  TollServiceResult,
+  CostBreakdownData,
+  FuelCountryBreakdown,
+} from '../models/roadCosts';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-export interface CostBreakdownData {
-  totalCostEur: number;
-  isPartialEstimate: boolean;
-  fuel: {
-    totalFuelCostEur: number;
-    breakdown: FuelCountryBreakdown[];
-  };
-  vignettes: {
-    totalVignetteCostEur: number;
-    breakdown: VignetteCountryBreakdown[];
-  };
-  vehicleProfile: {
-    id: string;
-    name: string;
-    fuelType: string;
-    consumptionPer100km: number;
-  };
-}
-
-export interface FuelCountryBreakdown {
-  countryCode: string;
-  countryName: string;
-  distanceKm: number;
-  fuelPricePerLiter: number;
-  fuelCostEur: number;
-}
-
-export interface VignetteCountryBreakdown {
-  countryCode: string;
-  countryName: string;
-  required: boolean;
-  motorcycleExempt: boolean;
-  selectedDuration: string;
-  availableDurations: string[];
-  priceEur: number;
-  priceUnavailable: boolean;
-}
+// Re-export types for backward compatibility
+export type { FuelCountryBreakdown, CostBreakdownData };
 
 // ─── Country Name Mapping ─────────────────────────────────────────────────────
 
@@ -102,12 +75,31 @@ function getShortestDuration(durations: VignetteDuration[]): VignetteDuration {
   return sorted[0];
 }
 
+// ─── Helper: Calculate Road Costs Total ───────────────────────────────────────
+
+/**
+ * Calculates totalRoadCostsEur as the sum of all vignette costs + bridge tolls
+ * + highway tolls, rounded to 2 decimal places.
+ * Requirements: 2.5
+ */
+export function calculateTotalRoadCosts(
+  vignettes: VignetteEntry[],
+  bridgeTolls: BridgeTollEntry[],
+  highwayTolls: HighwayTollEntry[]
+): number {
+  const vignetteCosts = vignettes.reduce((sum, v) => sum + v.cost, 0);
+  const bridgeCosts = bridgeTolls.reduce((sum, b) => sum + b.cost, 0);
+  const highwayCosts = highwayTolls.reduce((sum, h) => sum + h.cost, 0);
+  return Math.round((vignetteCosts + bridgeCosts + highwayCosts) * 100) / 100;
+}
+
 // ─── Main Service Function ────────────────────────────────────────────────────
 
 /**
  * Get composite cost breakdown for a route.
- * Calls existing services for fuel and vignette data, then composes
+ * Calls existing services for fuel, vignette, and toll data, then composes
  * a unified response matching the CostBreakdownData interface.
+ * Requirements: 1.1, 1.3, 2.1, 2.2, 2.3, 2.4, 2.5, 4.3, 6.1
  */
 export async function getCostBreakdown(
   routeId: string,
@@ -139,20 +131,49 @@ export async function getCostBreakdown(
   // 3. Calculate fuel breakdown
   const fuelResult = await calculateFuelBreakdown(routeData.segments, vehicle);
 
-  // 4. Calculate vignette breakdown
+  // 4. Fetch toll data from Google Routes API (Requirement 1.1)
+  const origin = extractOrigin(routeData.waypoints);
+  const destination = extractDestination(routeData.waypoints);
+  const waypoints = extractIntermediateWaypoints(routeData.waypoints);
+
+  let tollResult: TollServiceResult | null = null;
+  if (origin && destination) {
+    tollResult = await getTollsForRoute(origin, destination, waypoints);
+  }
+
+  // 5. Calculate vignette breakdown (restructured into VignetteEntry format)
   const vignetteResult = await calculateVignetteBreakdown(
     routeId,
     vehicle,
     durationOverrides
   );
 
-  // 5. Determine if this is a partial estimate
-  const isPartialEstimate = fuelResult.hasUnavailablePrices || vignetteResult.hasUnavailablePrices;
+  // 6. Compose roadCosts object (Requirement 2.1)
+  const bridgeTolls: BridgeTollEntry[] = tollResult?.bridgeTolls ?? [];
+  const highwayTolls: HighwayTollEntry[] = tollResult?.highwayTolls ?? [];
+  const totalRoadCostsEur = calculateTotalRoadCosts(
+    vignetteResult.vignettes,
+    bridgeTolls,
+    highwayTolls
+  );
 
-  // 6. Calculate total cost
-  const totalCostEur = Math.round(
-    (fuelResult.totalFuelCostEur + vignetteResult.totalVignetteCostEur) * 100
-  ) / 100;
+  const roadCosts: RoadCosts = {
+    vignettes: vignetteResult.vignettes,
+    bridgeTolls,
+    highwayTolls,
+    totalRoadCostsEur,
+  };
+
+  // 7. Determine if this is a partial estimate
+  // isPartialEstimate is true when toll API fails (Requirement 1.3) or prices are unavailable
+  const isPartialEstimate =
+    fuelResult.hasUnavailablePrices ||
+    vignetteResult.hasUnavailablePrices ||
+    (tollResult === null && origin !== null && destination !== null);
+
+  // 8. Calculate total cost: fuel + road costs (Requirement 6.1)
+  const totalCostEur =
+    Math.round((fuelResult.totalFuelCostEur + totalRoadCostsEur) * 100) / 100;
 
   return {
     totalCostEur,
@@ -161,10 +182,7 @@ export async function getCostBreakdown(
       totalFuelCostEur: fuelResult.totalFuelCostEur,
       breakdown: fuelResult.breakdown,
     },
-    vignettes: {
-      totalVignetteCostEur: vignetteResult.totalVignetteCostEur,
-      breakdown: vignetteResult.breakdown,
-    },
+    roadCosts,
     vehicleProfile: {
       id: vehicle.id,
       name: vehicle.name,
@@ -172,6 +190,34 @@ export async function getCostBreakdown(
       consumptionPer100km: vehicle.consumption_per_100km,
     },
   };
+}
+
+// ─── Waypoint Extraction Helpers ──────────────────────────────────────────────
+
+interface WaypointLike {
+  latitude: number;
+  longitude: number;
+  waypoint_type: string;
+  position: number;
+}
+
+function extractOrigin(waypoints: WaypointLike[]): LatLng | null {
+  const origin = waypoints.find((wp) => wp.waypoint_type === 'origin');
+  if (!origin) return null;
+  return { latitude: origin.latitude, longitude: origin.longitude };
+}
+
+function extractDestination(waypoints: WaypointLike[]): LatLng | null {
+  const destination = waypoints.find((wp) => wp.waypoint_type === 'destination');
+  if (!destination) return null;
+  return { latitude: destination.latitude, longitude: destination.longitude };
+}
+
+function extractIntermediateWaypoints(waypoints: WaypointLike[]): LatLng[] {
+  return waypoints
+    .filter((wp) => wp.waypoint_type === 'stop')
+    .sort((a, b) => a.position - b.position)
+    .map((wp) => ({ latitude: wp.latitude, longitude: wp.longitude }));
 }
 
 // ─── Fuel Breakdown Calculation ───────────────────────────────────────────────
@@ -281,16 +327,16 @@ async function calculateFuelBreakdown(
 // ─── Vignette Breakdown Calculation ───────────────────────────────────────────
 
 interface VignetteBreakdownResult {
-  totalVignetteCostEur: number;
-  breakdown: VignetteCountryBreakdown[];
+  vignettes: VignetteEntry[];
   hasUnavailablePrices: boolean;
 }
 
 /**
  * Calculates vignette cost breakdown for a route.
+ * Returns VignetteEntry[] format with countryCode, countryName, duration, cost,
+ * and availableDurations.
  * Uses the shortest available duration as default, or the override if provided.
- * Marks countries with unavailable prices.
- * Includes availableDurations per country for the frontend duration selector.
+ * Requirements: 2.2, 4.3
  */
 async function calculateVignetteBreakdown(
   routeId: string,
@@ -300,26 +346,22 @@ async function calculateVignetteBreakdown(
   // Get vignette requirements for this route with vehicle type for exemption logic
   const requirements = await getRouteVignetteRequirements(routeId, vehicle.vehicle_type);
 
-  let totalVignetteCost = 0;
   let hasUnavailablePrices = false;
-  const breakdown: VignetteCountryBreakdown[] = [];
+  const vignettes: VignetteEntry[] = [];
 
   for (const req of requirements) {
     const isExempt = !req.required;
 
     if (isExempt) {
-      // Motorcycle exempt — cost is 0 (Requirement 4.5)
-      breakdown.push({
+      // Motorcycle exempt — cost is 0
+      vignettes.push({
         countryCode: req.countryCode,
         countryName: req.countryName,
-        required: false,
-        motorcycleExempt: req.motorcycleExempt,
-        selectedDuration: req.availableDurations.length > 0
+        duration: req.availableDurations.length > 0
           ? getShortestDuration(req.availableDurations)
           : '',
+        cost: 0,
         availableDurations: req.availableDurations,
-        priceEur: 0,
-        priceUnavailable: false,
       });
       continue;
     }
@@ -330,6 +372,7 @@ async function calculateVignetteBreakdown(
       : await getPrices(req.countryCode, vehicle.vehicle_type);
 
     // Determine selected duration: use override if provided, otherwise shortest available
+    // Requirement 4.3: use specified duration to look up corresponding vignette price
     const selectedDuration: VignetteDuration = (
       durationOverrides?.[req.countryCode] as VignetteDuration
     ) || (
@@ -342,39 +385,29 @@ async function calculateVignetteBreakdown(
     const priceEntry = prices.find((p) => p.duration === selectedDuration);
 
     if (prices.length === 0 || !priceEntry) {
-      // Price unavailable (Requirement 4.7)
+      // Price unavailable
       hasUnavailablePrices = true;
-      breakdown.push({
+      vignettes.push({
         countryCode: req.countryCode,
         countryName: req.countryName,
-        required: true,
-        motorcycleExempt: req.motorcycleExempt,
-        selectedDuration,
+        duration: selectedDuration,
+        cost: 0,
         availableDurations: req.availableDurations,
-        priceEur: 0,
-        priceUnavailable: true,
       });
       continue;
     }
 
-    const costEur = priceEntry.price_eur;
-    totalVignetteCost += costEur;
-
-    breakdown.push({
+    vignettes.push({
       countryCode: req.countryCode,
       countryName: req.countryName,
-      required: true,
-      motorcycleExempt: req.motorcycleExempt,
-      selectedDuration,
+      duration: selectedDuration,
+      cost: priceEntry.price_eur,
       availableDurations: req.availableDurations,
-      priceEur: costEur,
-      priceUnavailable: false,
     });
   }
 
   return {
-    totalVignetteCostEur: Math.round(totalVignetteCost * 100) / 100,
-    breakdown,
+    vignettes,
     hasUnavailablePrices,
   };
 }

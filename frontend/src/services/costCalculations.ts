@@ -78,6 +78,47 @@ export interface VignetteCountryBreakdown {
   priceUnavailable: boolean;
 }
 
+// ─── Road Costs Interfaces ────────────────────────────────────────────────────
+
+/**
+ * A bridge toll entry in the cost breakdown response.
+ */
+export interface BridgeTollEntry {
+  name: string;
+  cost: number;
+}
+
+/**
+ * A highway toll entry in the cost breakdown response.
+ */
+export interface HighwayTollEntry {
+  segment: string;
+  cost: number;
+}
+
+/**
+ * A vignette entry in the road costs response.
+ */
+export interface VignetteEntry {
+  countryCode: string;
+  countryName: string;
+  duration: string;
+  cost: number;
+  availableDurations: string[];
+}
+
+/**
+ * The road costs section of the cost breakdown response.
+ */
+export interface RoadCosts {
+  vignettes: VignetteEntry[];
+  bridgeTolls: BridgeTollEntry[];
+  highwayTolls: HighwayTollEntry[];
+  totalRoadCostsEur: number;
+}
+
+// ─── Cost Breakdown Data ──────────────────────────────────────────────────────
+
 export interface CostBreakdownData {
   totalCostEur: number;
   isPartialEstimate: boolean;
@@ -85,10 +126,7 @@ export interface CostBreakdownData {
     totalFuelCostEur: number;
     breakdown: FuelCountryBreakdown[];
   };
-  vignettes: {
-    totalVignetteCostEur: number;
-    breakdown: VignetteCountryBreakdown[];
-  };
+  roadCosts: RoadCosts;
   vehicleProfile: {
     id: string;
     name: string;
@@ -209,4 +247,15 @@ export function calculateTripTotal(
     ((fuelCost ?? 0) + (vignetteCost ?? 0)) * 100
   ) / 100;
   return { total, isPartial };
+}
+
+/**
+ * Calculate road costs subtotal from vignettes, bridge tolls, and highway tolls.
+ * Returns the sum of all individual costs rounded to 2 decimal places.
+ */
+export function calculateRoadCostsSubtotal(roadCosts: RoadCosts): number {
+  const vignettesTotal = roadCosts.vignettes.reduce((sum, v) => sum + v.cost, 0);
+  const bridgeTollsTotal = roadCosts.bridgeTolls.reduce((sum, b) => sum + b.cost, 0);
+  const highwayTollsTotal = roadCosts.highwayTolls.reduce((sum, h) => sum + h.cost, 0);
+  return Math.round((vignettesTotal + bridgeTollsTotal + highwayTollsTotal) * 100) / 100;
 }

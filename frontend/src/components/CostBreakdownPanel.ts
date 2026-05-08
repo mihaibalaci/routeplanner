@@ -12,8 +12,8 @@
  */
 
 import { apiClient } from '../api/client';
-import type { CostBreakdownData, PanelState, VignetteDuration } from '../services/costCalculations';
-import { formatEur } from '../services/costCalculations';
+import type { CostBreakdownData, PanelState, VignetteDuration, RoadCosts } from '../services/costCalculations';
+import { formatEur, calculateRoadCostsSubtotal } from '../services/costCalculations';
 import { VehicleSelector, type VehicleProfileResponse } from './VehicleSelector';
 
 export interface CostBreakdownPanelOptions {
@@ -393,7 +393,7 @@ export class CostBreakdownPanel {
       </div>
       <div class="cost-breakdown-panel__details">
         ${this.renderFuelSection()}
-        ${this.renderVignetteSection()}
+        ${this.renderRoadCostsSection()}
       </div>
     `;
   }
@@ -445,97 +445,129 @@ export class CostBreakdownPanel {
     `;
   }
 
-  private renderVignetteSection(): string {
+  private renderRoadCostsSection(): string {
     if (!this.costData) return '';
 
-    const { vignettes } = this.costData;
+    const { roadCosts } = this.costData;
+    const subtotal = calculateRoadCostsSubtotal(roadCosts);
 
-    // No vignette countries on route
-    if (vignettes.breakdown.length === 0) {
+    return `
+      <section class="cost-breakdown-panel__section cost-breakdown-panel__road-costs-section">
+        <h4 class="cost-breakdown-panel__section-title">
+          Road Costs
+          <span class="cost-breakdown-panel__section-total">${formatEur(subtotal)}</span>
+        </h4>
+        ${this.renderVignettesGroup(roadCosts)}
+        ${this.renderBridgeTollsGroup(roadCosts)}
+        ${this.renderHighwayTollsGroup(roadCosts)}
+        <div class="cost-breakdown-panel__subtotal">
+          <span class="cost-breakdown-panel__subtotal-label">Road costs subtotal</span>
+          <span class="cost-breakdown-panel__subtotal-value">${formatEur(subtotal)}</span>
+        </div>
+      </section>
+    `;
+  }
+
+  private renderVignettesGroup(roadCosts: RoadCosts): string {
+    if (roadCosts.vignettes.length === 0) {
       return `
-        <section class="cost-breakdown-panel__section cost-breakdown-panel__vignette-section">
-          <h4 class="cost-breakdown-panel__section-title">Vignettes</h4>
+        <div class="cost-breakdown-panel__group cost-breakdown-panel__vignettes-group">
+          <h5 class="cost-breakdown-panel__group-title">Vignettes</h5>
           <p class="cost-breakdown-panel__no-vignettes">No vignettes required</p>
-        </section>
+        </div>
       `;
     }
 
-    const rows = vignettes.breakdown
-      .map((entry) => this.renderVignetteRow(entry))
+    const rows = roadCosts.vignettes
+      .map((entry) => {
+        const durationOptions = entry.availableDurations
+          .map((dur) => {
+            const selected = dur === entry.duration ? ' selected' : '';
+            return `<option value="${dur}"${selected}>${dur}</option>`;
+          })
+          .join('');
+
+        return `
+          <tr class="cost-breakdown-panel__vignette-row">
+            <td class="cost-breakdown-panel__country-name">${entry.countryName}</td>
+            <td class="cost-breakdown-panel__duration">
+              <select
+                class="cost-breakdown-panel__duration-select"
+                data-country-code="${entry.countryCode}"
+                aria-label="Vignette duration for ${entry.countryName}"
+              >
+                ${durationOptions}
+              </select>
+            </td>
+            <td class="cost-breakdown-panel__cost">${formatEur(entry.cost)}</td>
+          </tr>
+        `;
+      })
       .join('');
 
     return `
-      <section class="cost-breakdown-panel__section cost-breakdown-panel__vignette-section">
-        <h4 class="cost-breakdown-panel__section-title">
-          Vignettes
-          <span class="cost-breakdown-panel__section-total">${formatEur(vignettes.totalVignetteCostEur)}</span>
-        </h4>
+      <div class="cost-breakdown-panel__group cost-breakdown-panel__vignettes-group">
+        <h5 class="cost-breakdown-panel__group-title">Vignettes</h5>
         <table class="cost-breakdown-panel__breakdown-table">
           <tbody>
             ${rows}
           </tbody>
         </table>
-      </section>
+      </div>
     `;
   }
 
-  private renderVignetteRow(entry: import('../services/costCalculations').VignetteCountryBreakdown): string {
-    // Motorcycle-exempt country
-    if (entry.motorcycleExempt) {
-      return `
-        <tr class="cost-breakdown-panel__vignette-row cost-breakdown-panel__vignette-row--exempt">
-          <td class="cost-breakdown-panel__country-name">${entry.countryName}</td>
-          <td class="cost-breakdown-panel__duration">
-            <span class="cost-breakdown-panel__exempt-label">exempt</span>
-          </td>
-          <td class="cost-breakdown-panel__cost">—</td>
-        </tr>
-      `;
+  private renderBridgeTollsGroup(roadCosts: RoadCosts): string {
+    if (roadCosts.bridgeTolls.length === 0) {
+      return '';
     }
 
-    // Price unavailable
-    if (entry.priceUnavailable) {
-      return `
-        <tr class="cost-breakdown-panel__vignette-row cost-breakdown-panel__vignette-row--unavailable">
-          <td class="cost-breakdown-panel__country-name">${entry.countryName}</td>
-          <td class="cost-breakdown-panel__duration">
-            ${this.renderDurationSelect(entry)}
-          </td>
-          <td class="cost-breakdown-panel__cost">
-            <span class="cost-breakdown-panel__unavailable-badge">unavailable</span>
-          </td>
-        </tr>
-      `;
-    }
-
-    // Normal vignette row with duration select and price
-    return `
-      <tr class="cost-breakdown-panel__vignette-row">
-        <td class="cost-breakdown-panel__country-name">${entry.countryName}</td>
-        <td class="cost-breakdown-panel__duration">
-          ${this.renderDurationSelect(entry)}
-        </td>
-        <td class="cost-breakdown-panel__cost">${formatEur(entry.priceEur)}</td>
-      </tr>
-    `;
-  }
-
-  private renderDurationSelect(entry: import('../services/costCalculations').VignetteCountryBreakdown): string {
-    const options = entry.availableDurations
-      .map((dur) => {
-        const selected = dur === entry.selectedDuration ? ' selected' : '';
-        return `<option value="${dur}"${selected}>${dur}</option>`;
-      })
+    const rows = roadCosts.bridgeTolls
+      .map(
+        (entry) => `
+        <tr class="cost-breakdown-panel__bridge-toll-row">
+          <td class="cost-breakdown-panel__toll-name">${entry.name}</td>
+          <td class="cost-breakdown-panel__cost">${formatEur(entry.cost)}</td>
+        </tr>`
+      )
       .join('');
 
     return `
-      <select
-        class="cost-breakdown-panel__duration-select"
-        data-country-code="${entry.countryCode}"
-        aria-label="Vignette duration for ${entry.countryName}"
-      >
-        ${options}
-      </select>
+      <div class="cost-breakdown-panel__group cost-breakdown-panel__bridge-tolls-group">
+        <h5 class="cost-breakdown-panel__group-title">Bridge Tolls</h5>
+        <table class="cost-breakdown-panel__breakdown-table">
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  private renderHighwayTollsGroup(roadCosts: RoadCosts): string {
+    if (roadCosts.highwayTolls.length === 0) {
+      return '';
+    }
+
+    const rows = roadCosts.highwayTolls
+      .map(
+        (entry) => `
+        <tr class="cost-breakdown-panel__highway-toll-row">
+          <td class="cost-breakdown-panel__toll-name">${entry.segment}</td>
+          <td class="cost-breakdown-panel__cost">${formatEur(entry.cost)}</td>
+        </tr>`
+      )
+      .join('');
+
+    return `
+      <div class="cost-breakdown-panel__group cost-breakdown-panel__highway-tolls-group">
+        <h5 class="cost-breakdown-panel__group-title">Highway Tolls</h5>
+        <table class="cost-breakdown-panel__breakdown-table">
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      </div>
     `;
   }
 
@@ -579,14 +611,14 @@ export class CostBreakdownPanel {
         const target = e.target as HTMLSelectElement;
         const countryCode = target.getAttribute('data-country-code');
         if (countryCode) {
-          this.handleDurationChange(countryCode, target.value as VignetteDuration);
+          this.handleDurationChange(countryCode, target.value);
         }
       });
     });
   }
 
-  private handleDurationChange(countryCode: string, duration: VignetteDuration): void {
-    this.durationOverrides[countryCode] = duration;
+  private handleDurationChange(countryCode: string, duration: string): void {
+    this.durationOverrides[countryCode] = duration as VignetteDuration;
     this.fetchCostBreakdown();
   }
 
