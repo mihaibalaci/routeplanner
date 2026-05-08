@@ -371,7 +371,7 @@ exports.up = (pgm) => {
     country_breakdown: {
       type: 'jsonb',
       notNull: true,
-      default: "'[]'",
+      default: pgm.func("'[]'::jsonb"),
     },
     calculated_at: {
       type: 'timestamp',
@@ -413,7 +413,7 @@ exports.up = (pgm) => {
     },
     fuel_types_available: {
       type: 'jsonb',
-      default: "'[]'",
+      default: pgm.func("'[]'::jsonb"),
     },
   });
 
@@ -493,7 +493,7 @@ exports.up = (pgm) => {
     available_durations: {
       type: 'jsonb',
       notNull: true,
-      default: "'[]'",
+      default: pgm.func("'[]'::jsonb"),
     },
     active: {
       type: 'boolean',
