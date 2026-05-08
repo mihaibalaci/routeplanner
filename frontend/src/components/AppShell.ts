@@ -1,34 +1,29 @@
 /**
- * App Shell Component
- *
- * Material Design Lite layout with:
- * - Fixed header with navigation
- * - Responsive drawer (side navigation)
- * - Main content area
+ * App Shell — Modern sidebar layout
  */
 
 export interface NavItem {
   label: string;
   icon: string;
   path: string;
-  active?: boolean;
+  section?: string;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Start Planning', icon: 'explore', path: '/start' },
-  { label: 'Route Planner', icon: 'map', path: '/' },
-  { label: 'Fuel Calculator', icon: 'calculate', path: '/calculator' },
-  { label: 'Trip Cost', icon: 'attach_money', path: '/cost' },
-  { label: 'Refuel Stops', icon: 'local_gas_station', path: '/refuel' },
-  { label: 'Export', icon: 'file_download', path: '/export' },
-  { label: 'My Vehicles', icon: 'directions_car', path: '/vehicles' },
-  { label: 'Route History', icon: 'history', path: '/history' },
+  { label: 'Start Planning', icon: 'explore', path: '/start', section: 'Plan' },
+  { label: 'Route Planner', icon: 'map', path: '/', section: 'Plan' },
+  { label: 'Fuel Calculator', icon: 'calculate', path: '/calculator', section: 'Tools' },
+  { label: 'Trip Cost', icon: 'payments', path: '/cost', section: 'Tools' },
+  { label: 'Refuel Stops', icon: 'local_gas_station', path: '/refuel', section: 'Tools' },
+  { label: 'Export', icon: 'download', path: '/export', section: 'Tools' },
+  { label: 'My Vehicles', icon: 'directions_car', path: '/vehicles', section: 'Account' },
+  { label: 'Route History', icon: 'history', path: '/history', section: 'Account' },
 ];
 
 export class AppShell {
   private container: HTMLElement;
   private contentArea: HTMLElement | null = null;
-  private currentPath: string = '/';
+  private currentPath: string = '/start';
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -36,13 +31,8 @@ export class AppShell {
 
   render(): void {
     this.container.innerHTML = this.buildLayout();
-    this.contentArea = this.container.querySelector('.app-content');
+    this.contentArea = this.container.querySelector('.main-content__inner');
     this.bindEvents();
-
-    // Upgrade MDL components after rendering
-    if (typeof componentHandler !== 'undefined') {
-      componentHandler.upgradeDom();
-    }
   }
 
   getContentArea(): HTMLElement | null {
@@ -56,56 +46,52 @@ export class AppShell {
 
   private buildLayout(): string {
     return `
-      <div class="mdl-layout mdl-js-layout mdl-layout--fixed-header mdl-layout--fixed-drawer">
-        ${this.buildHeader()}
-        ${this.buildDrawer()}
-        <main class="mdl-layout__content">
-          <div class="app-content page-content"></div>
+      <div class="app-layout">
+        ${this.buildSidebar()}
+        <main class="main-content">
+          <div class="main-content__inner"></div>
         </main>
       </div>
     `;
   }
 
-  private buildHeader(): string {
-    return `
-      <header class="mdl-layout__header">
-        <div class="mdl-layout__header-row">
-          <span class="mdl-layout-title">Route Planner</span>
-          <div class="mdl-layout-spacer"></div>
-          <nav class="mdl-navigation mdl-layout--large-screen-only">
-            <a class="mdl-navigation__link" href="/profile" data-nav="/profile">
-              <i class="material-icons">account_circle</i>
-            </a>
-          </nav>
-        </div>
-      </header>
-    `;
-  }
+  private buildSidebar(): string {
+    // Group nav items by section
+    const sections = new Map<string, NavItem[]>();
+    for (const item of NAV_ITEMS) {
+      const section = item.section || 'General';
+      if (!sections.has(section)) sections.set(section, []);
+      sections.get(section)!.push(item);
+    }
 
-  private buildDrawer(): string {
-    const navLinks = NAV_ITEMS.map(
-      (item) => `
-        <a class="mdl-navigation__link${item.path === this.currentPath ? ' is-active' : ''}"
-           href="${item.path}"
-           data-nav="${item.path}">
-          <i class="material-icons nav-icon">${item.icon}</i>
+    let navHtml = '';
+    for (const [section, items] of sections) {
+      navHtml += `<div class="sidebar__section-label">${section}</div>`;
+      navHtml += items.map(item => `
+        <a class="nav-item ${item.path === this.currentPath ? 'is-active' : ''}"
+           href="${item.path}" data-nav="${item.path}">
+          <span class="material-symbols-rounded nav-item__icon">${item.icon}</span>
           ${item.label}
         </a>
-      `
-    ).join('');
+      `).join('');
+    }
 
     return `
-      <div class="mdl-layout__drawer">
-        <span class="mdl-layout-title">Route Planner</span>
-        <nav class="mdl-navigation">
-          ${navLinks}
+      <aside class="sidebar">
+        <div class="sidebar__brand">
+          <div class="sidebar__brand-icon">
+            <span class="material-symbols-rounded" style="font-size:18px;">route</span>
+          </div>
+          <span class="sidebar__brand-text">Route Planner</span>
+        </div>
+        <nav class="sidebar__nav">
+          ${navHtml}
         </nav>
-      </div>
+      </aside>
     `;
   }
 
   private bindEvents(): void {
-    // Handle navigation link clicks (SPA routing)
     this.container.addEventListener('click', (e: Event) => {
       const target = e.target as HTMLElement;
       const link = target.closest('[data-nav]') as HTMLElement | null;
@@ -123,9 +109,6 @@ export class AppShell {
     this.currentPath = path;
     window.history.pushState({}, '', path);
     this.updateActiveNav();
-    this.closeDrawer();
-
-    // Dispatch custom navigation event for the app to handle
     window.dispatchEvent(
       new CustomEvent('app:navigate', { detail: { path } })
     );
@@ -135,22 +118,7 @@ export class AppShell {
     const links = this.container.querySelectorAll('[data-nav]');
     links.forEach((link) => {
       const linkPath = link.getAttribute('data-nav');
-      if (linkPath === this.currentPath) {
-        link.classList.add('is-active');
-      } else {
-        link.classList.remove('is-active');
-      }
+      link.classList.toggle('is-active', linkPath === this.currentPath);
     });
-  }
-
-  private closeDrawer(): void {
-    const drawer = this.container.querySelector('.mdl-layout__drawer');
-    const obfuscator = document.querySelector('.mdl-layout__obfuscator');
-    if (drawer) {
-      drawer.classList.remove('is-visible');
-    }
-    if (obfuscator) {
-      obfuscator.classList.remove('is-visible');
-    }
   }
 }
