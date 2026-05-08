@@ -83,6 +83,12 @@ npm run lint      # Lint backend code
 | `GOOGLE_MAPS_API_KEY` | Google Maps API key |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID |
 | `APPLE_CLIENT_ID` | Apple Sign In client ID |
+| `SMTP_HOST` | SMTP server hostname |
+| `SMTP_PORT` | SMTP port (587 for TLS, 465 for SSL) |
+| `SMTP_USER` | SMTP authentication username |
+| `SMTP_PASS` | SMTP authentication password |
+| `SMTP_FROM` | Sender email address |
+| `APP_URL` | Public URL of the app (for email links) |
 
 ## API Endpoints
 

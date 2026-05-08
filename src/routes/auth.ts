@@ -3,6 +3,7 @@ import { createUser } from '../services/userService';
 import { login } from '../services/authService';
 import { handleGoogleLogin, handleAppleLogin } from '../services/ssoService';
 import { toUserResponse } from '../models/user';
+import { generateConfirmationToken, sendConfirmationEmail, confirmEmail } from '../services/emailService';
 
 const router = Router();
 
@@ -35,9 +36,19 @@ router.post('/register', async (req: Request, res: Response) => {
 
     const user = await createUser(email, password, displayName);
 
+    // Generate confirmation token and send email
+    try {
+      const token = await generateConfirmationToken(user.id);
+      await sendConfirmationEmail(email, token);
+    } catch (emailErr) {
+      // Don't fail registration if email sending fails — user can request resend
+      console.warn('[Auth] Failed to send confirmation email:', (emailErr as Error).message);
+    }
+
     res.status(201).json({
       status: 201,
       data: toUserResponse(user),
+      message: 'Account created. Please check your email to confirm your account.',
       requestId: req.requestId,
     });
   } catch (err: any) {
@@ -207,6 +218,48 @@ router.post('/apple', async (req: Request, res: Response) => {
 
     // Unexpected error — let the error handler deal with it
     throw err;
+  }
+});
+
+/**
+ * GET /api/v1/auth/confirm/:token
+ * Confirm a user's email address using the token sent via email.
+ */
+router.get('/confirm/:token', async (req: Request, res: Response) => {
+  try {
+    const { token } = req.params;
+
+    if (!token) {
+      res.status(400).json({
+        status: 400,
+        message: 'Missing confirmation token',
+        requestId: req.requestId,
+      });
+      return;
+    }
+
+    const userId = await confirmEmail(token as string);
+
+    if (!userId) {
+      res.status(400).json({
+        status: 400,
+        message: 'Invalid or expired confirmation token',
+        requestId: req.requestId,
+      });
+      return;
+    }
+
+    res.status(200).json({
+      status: 200,
+      message: 'Email confirmed successfully. You can now log in.',
+      requestId: req.requestId,
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      status: 500,
+      message: 'Failed to confirm email',
+      requestId: req.requestId,
+    });
   }
 });
 

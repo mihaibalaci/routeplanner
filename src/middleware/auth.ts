@@ -7,6 +7,7 @@ const PUBLIC_PATHS = [
   '/auth/login',
   '/auth/google',
   '/auth/apple',
+  '/auth/confirm',
   '/health',
 ];
 

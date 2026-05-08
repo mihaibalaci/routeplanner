@@ -9,6 +9,7 @@ export interface User {
   display_name: string;
   failed_login_attempts: number;
   locked_until: Date | null;
+  email_confirmed: boolean;
   created_at: Date;
   updated_at: Date;
 }

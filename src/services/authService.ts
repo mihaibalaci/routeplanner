@@ -44,6 +44,13 @@ export async function login(
     throw error;
   }
 
+  // Check if email is confirmed
+  if (!(user as any).email_confirmed) {
+    const error = new Error('Please confirm your email address before logging in. Check your inbox for the confirmation link.') as Error & { statusCode: number };
+    error.statusCode = 403;
+    throw error;
+  }
+
   // Check if account is locked
   if (user.locked_until && new Date(user.locked_until) > new Date()) {
     const error = new Error('Account is temporarily locked. Please try again later.') as Error & { statusCode: number };
