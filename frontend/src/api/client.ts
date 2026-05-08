@@ -74,13 +74,12 @@ class ApiClient {
   // --- HTTP Methods ---
 
   async get<T>(path: string, params?: Record<string, string>): Promise<ApiResponse<T>> {
-    const url = new URL(`${this.baseUrl}${path}`);
+    let url = `${this.baseUrl}${path}`;
     if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        url.searchParams.append(key, value);
-      });
+      const searchParams = new URLSearchParams(params);
+      url += `?${searchParams.toString()}`;
     }
-    return this.request<T>(url.toString(), { method: 'GET' });
+    return this.request<T>(url, { method: 'GET' });
   }
 
   async post<T>(path: string, body?: unknown): Promise<ApiResponse<T>> {

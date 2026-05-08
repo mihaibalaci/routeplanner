@@ -110,7 +110,17 @@ app.use('/api/v1/users', usersRouter);
 
 // Serve frontend static files (production)
 const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
-app.use(express.static(frontendDist));
+app.use(express.static(frontendDist, {
+  // Cache hashed assets (they have unique filenames) for 1 year
+  setHeaders: (res, filePath) => {
+    if (filePath.includes('/assets/')) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    } else {
+      // Don't cache index.html — always serve fresh
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+  },
+}));
 
 // SPA fallback: serve index.html for any non-API route
 app.get('*', (req, res, next) => {
