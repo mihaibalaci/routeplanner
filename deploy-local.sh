@@ -56,7 +56,7 @@ echo "  Source code ready at ${APP_DIR}"
 # Step 5: Install dependencies and build
 echo "[5/7] Installing dependencies and building..."
 cd ${APP_DIR}
-npm install
+npm install --legacy-peer-deps
 echo "  Backend dependencies installed"
 
 npx tsc
