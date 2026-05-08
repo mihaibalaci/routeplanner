@@ -15,6 +15,7 @@ export interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
+  { label: 'Start Planning', icon: 'explore', path: '/start' },
   { label: 'Route Planner', icon: 'map', path: '/' },
   { label: 'Fuel Calculator', icon: 'calculate', path: '/calculator' },
   { label: 'Trip Cost', icon: 'attach_money', path: '/cost' },

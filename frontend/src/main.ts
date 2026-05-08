@@ -9,6 +9,7 @@ import { RefuelAdvisorPage } from './pages/RefuelAdvisorPage';
 import { ExportPage } from './pages/ExportPage';
 import { HistoryPage } from './pages/HistoryPage';
 import { FuelCalculatorPage } from './pages/FuelCalculatorPage';
+import { StartPlanningPage } from './pages/StartPlanningPage';
 
 // Declare MDL's componentHandler on window
 declare global {
@@ -49,7 +50,12 @@ class App {
   }
 
   private handleInitialRoute(): void {
-    const path = window.location.pathname;
+    let path = window.location.pathname;
+    // Redirect root to /start (landing wizard) on fresh visits
+    if (path === '/' && !window.location.search) {
+      path = '/start';
+      window.history.replaceState({}, '', path);
+    }
     this.shell.setActivePath(path);
     this.renderPage(path);
   }
@@ -59,7 +65,7 @@ class App {
     if (!content) return;
 
     // Check authentication for protected routes
-    if (path !== '/login' && path !== '/register' && path !== '/calculator' && !apiClient.isAuthenticated()) {
+    if (path !== '/login' && path !== '/register' && path !== '/calculator' && path !== '/start' && !apiClient.isAuthenticated()) {
       new LoginPage(content).render();
       return;
     }
@@ -68,6 +74,10 @@ class App {
       case '/':
         content.innerHTML = '';
         new RoutePlannerPage(content).render();
+        break;
+      case '/start':
+        content.innerHTML = '';
+        new StartPlanningPage(content).render();
         break;
       case '/cost':
         content.innerHTML = '';
