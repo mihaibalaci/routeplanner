@@ -10,6 +10,7 @@ import { ExportPage } from './pages/ExportPage';
 import { HistoryPage } from './pages/HistoryPage';
 import { FuelCalculatorPage } from './pages/FuelCalculatorPage';
 import { StartPlanningPage } from './pages/StartPlanningPage';
+import './styles/main.css';
 
 // Declare MDL's componentHandler on window
 declare global {

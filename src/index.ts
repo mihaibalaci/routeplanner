@@ -29,6 +29,7 @@ const PORT = process.env.PORT || 3000;
 app.use(
   helmet({
     contentSecurityPolicy: {
+      useDefaults: false,
       directives: {
         defaultSrc: ["'self'"],
         scriptSrc: [
@@ -64,6 +65,8 @@ app.use(
         ],
       },
     },
+    // Don't force HTTPS upgrades (we run on HTTP in dev/LAN)
+    strictTransportSecurity: false,
   })
 );
 app.use(cors());
