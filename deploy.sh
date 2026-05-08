@@ -10,8 +10,13 @@ USER="${2:-root}"
 REMOTE="${USER}@${HOST}"
 APP_DIR="/opt/routeplanner"
 
+# Resolve the project directory (where this script lives)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="${SCRIPT_DIR}"
+
 echo "=== Route Planner Deployment ==="
 echo "Target: ${REMOTE}:${APP_DIR}"
+echo "Source: ${PROJECT_DIR}"
 echo ""
 
 # Step 1: Install dependencies on remote
@@ -35,14 +40,15 @@ ssh ${REMOTE} "systemctl enable redis-server && systemctl start redis-server"
 echo "[4/6] Copying application files..."
 ssh ${REMOTE} "mkdir -p ${APP_DIR}"
 
-# Sync backend (exclude node_modules, dist, frontend node_modules)
+# Sync project files from the project directory (not cwd)
 rsync -avz --delete \
   --exclude 'node_modules' \
   --exclude 'dist' \
   --exclude 'frontend/node_modules' \
   --exclude 'frontend/dist' \
   --exclude '.git' \
-  ./ ${REMOTE}:${APP_DIR}/
+  --exclude '.env' \
+  "${PROJECT_DIR}/" ${REMOTE}:${APP_DIR}/
 
 # Step 5: Install dependencies and build on remote
 echo "[5/6] Installing dependencies and building..."
