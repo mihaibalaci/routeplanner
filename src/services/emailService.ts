@@ -78,10 +78,39 @@ export async function sendConfirmationEmail(
 }
 
 /**
- * Verify a confirmation token and mark the user's email as confirmed.
- * Returns the user ID if successful, null if token is invalid/expired.
+ * Count how many confirmation tokens were created in the last hour for a user.
+ * Used for rate-limiting resend requests.
  */
-export async function confirmEmail(token: string): Promise<string | null> {
+export async function countRecentTokens(userId: string): Promise<number> {
+  const result = await query(
+    `SELECT COUNT(*) as count FROM confirmation_tokens
+     WHERE user_id = $1 AND created_at > NOW() - INTERVAL '1 hour'`,
+    [userId]
+  );
+  return parseInt(result.rows[0].count, 10);
+}
+
+/**
+ * Invalidate all unused confirmation tokens for a user by marking them as used.
+ */
+export async function invalidateExistingTokens(userId: string): Promise<void> {
+  await query(
+    `UPDATE confirmation_tokens SET used = true WHERE user_id = $1 AND used = false`,
+    [userId]
+  );
+}
+
+export interface ConfirmEmailResult {
+  success: boolean;
+  userId?: string;
+  reason?: 'malformed' | 'expired' | 'already_used';
+}
+
+/**
+ * Verify a confirmation token and mark the user's email as confirmed.
+ * Returns a result object with success status and failure reason if applicable.
+ */
+export async function confirmEmail(token: string): Promise<ConfirmEmailResult> {
   const result = await query(
     `SELECT ct.id, ct.user_id, ct.expires_at, ct.used
      FROM confirmation_tokens ct
@@ -89,15 +118,21 @@ export async function confirmEmail(token: string): Promise<string | null> {
     [token]
   );
 
-  if (result.rows.length === 0) return null;
+  if (result.rows.length === 0) {
+    return { success: false, reason: 'malformed' };
+  }
 
   const row = result.rows[0];
 
   // Check if already used
-  if (row.used) return null;
+  if (row.used) {
+    return { success: false, reason: 'already_used' };
+  }
 
   // Check if expired
-  if (new Date(row.expires_at) < new Date()) return null;
+  if (new Date(row.expires_at) < new Date()) {
+    return { success: false, reason: 'expired' };
+  }
 
   // Mark token as used
   await query(
@@ -111,5 +146,5 @@ export async function confirmEmail(token: string): Promise<string | null> {
     [row.user_id]
   );
 
-  return row.user_id;
+  return { success: true, userId: row.user_id };
 }

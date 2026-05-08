@@ -16,6 +16,7 @@ const REFRESH_TOKEN_KEY = 'routeplanner_refresh_token';
 export interface ApiError {
   status: number;
   message: string;
+  errors?: string[];
   details?: unknown;
 }
 
@@ -136,11 +137,11 @@ class ApiClient {
       this.clearTokens();
       window.history.pushState({}, '', '/login');
       window.dispatchEvent(new CustomEvent('app:navigate', { detail: { path: '/login' } }));
-      throw this.createApiError(401, 'Session expired. Please log in again.');
+      throw this.createApiError(401, 'Session expired. Please log in again.', undefined, undefined);
     }
 
     if (!response.ok) {
-      let errorBody: { message?: string; details?: unknown } = {};
+      let errorBody: { message?: string; errors?: string[]; details?: unknown } = {};
       try {
         errorBody = await response.json();
       } catch {
@@ -149,6 +150,7 @@ class ApiClient {
       throw this.createApiError(
         response.status,
         errorBody.message || response.statusText,
+        errorBody.errors,
         errorBody.details
       );
     }
@@ -204,8 +206,8 @@ class ApiClient {
 
   // --- Helpers ---
 
-  private createApiError(status: number, message: string, details?: unknown): ApiError {
-    return { status, message, details };
+  private createApiError(status: number, message: string, errors?: string[], details?: unknown): ApiError {
+    return { status, message, errors, details };
   }
 }
 

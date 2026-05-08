@@ -14,6 +14,9 @@ export function validatePassword(password: string): ValidationResult {
   if (password.length < 8) {
     errors.push('Password must be at least 8 characters');
   }
+  if (password.length > 128) {
+    errors.push('Password must not exceed 128 characters');
+  }
   if (!/[A-Z]/.test(password)) {
     errors.push('Password must contain at least one uppercase letter');
   }
@@ -38,10 +41,29 @@ export function validateEmail(email: string): ValidationResult {
     return { valid: false, errors };
   }
 
+  if (email.length > 254) {
+    errors.push('Email must not exceed 254 characters');
+  }
+
   // Standard email format validation
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
+  if (!emailRegex.test(email.trim())) {
     errors.push('Email format is invalid');
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
+/**
+ * Validates display name: required, trimmed length between 1 and 100 characters.
+ */
+export function validateDisplayName(displayName: string): ValidationResult {
+  const errors: string[] = [];
+
+  if (!displayName || displayName.trim().length === 0) {
+    errors.push('Display name is required');
+  } else if (displayName.trim().length > 100) {
+    errors.push('Display name must not exceed 100 characters');
   }
 
   return { valid: errors.length === 0, errors };

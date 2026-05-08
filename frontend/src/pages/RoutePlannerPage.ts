@@ -40,7 +40,7 @@ export class RoutePlannerPage {
 
         <div class="route-planner-layout">
           <div class="route-planner-layout__main">
-            <div style="display:grid;grid-template-columns:380px 1fr;gap:var(--space-4);min-height:500px;">
+            <div style="display:grid;grid-template-columns:340px 1fr;gap:var(--space-4);min-height:500px;">
               <div style="display:flex;flex-direction:column;gap:var(--space-4);">
                 <div class="card" style="align-self:start;">
                   <div class="card__title" style="margin-bottom:var(--space-4);">Waypoints</div>

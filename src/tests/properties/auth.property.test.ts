@@ -490,6 +490,7 @@ describe('Property 25: Account Lockout After Failed Attempts', () => {
 
           let failedAttempts = 0;
           let lockedUntil: Date | null = null;
+          let lastFailedAt: Date | null = null;
 
           mockQuery.mockImplementation(async (text: string, params?: unknown[]) => {
             if (text.includes('SELECT * FROM users WHERE email')) {
@@ -501,6 +502,8 @@ describe('Property 25: Account Lockout After Failed Attempts', () => {
                   display_name: 'Test User',
                   failed_login_attempts: failedAttempts,
                   locked_until: lockedUntil,
+                  last_failed_at: lastFailedAt,
+                  email_confirmed: true,
                   created_at: new Date(),
                   updated_at: new Date(),
                 }],
@@ -509,8 +512,13 @@ describe('Property 25: Account Lockout After Failed Attempts', () => {
             if (text.includes('UPDATE users SET failed_login_attempts')) {
               const newAttempts = params?.[0] as number;
               failedAttempts = newAttempts;
-              if (params?.[1] && typeof params[1] === 'string') {
-                lockedUntil = new Date(params[1]);
+              if (text.includes('locked_until')) {
+                // Lockout query: [newAttempts, lockedUntil, lastFailedAt, userId]
+                lockedUntil = new Date(params![1] as string);
+                lastFailedAt = new Date(params![2] as string);
+              } else if (text.includes('last_failed_at')) {
+                // Non-lockout query: [newAttempts, lastFailedAt, userId]
+                lastFailedAt = new Date(params![1] as string);
               }
               return { rows: [] };
             }

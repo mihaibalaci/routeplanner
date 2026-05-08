@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { createUser } from '../services/userService';
+import { createUser, validateEmail, validatePassword, validateDisplayName, findByEmail } from '../services/userService';
 import { login } from '../services/authService';
 import { handleGoogleLogin, handleAppleLogin } from '../services/ssoService';
 import { toUserResponse } from '../models/user';
-import { generateConfirmationToken, sendConfirmationEmail, confirmEmail } from '../services/emailService';
+import { generateConfirmationToken, sendConfirmationEmail, confirmEmail, countRecentTokens, invalidateExistingTokens } from '../services/emailService';
 
 const router = Router();
 
@@ -29,6 +29,28 @@ router.post('/register', async (req: Request, res: Response) => {
       res.status(400).json({
         status: 400,
         message: `Missing required fields: ${missingFields.join(', ')}`,
+        errors: missingFields.map(f => `${f} is required`),
+        requestId: req.requestId,
+      });
+      return;
+    }
+
+    // Validate all fields and aggregate errors
+    const emailValidation = validateEmail(email);
+    const passwordValidation = validatePassword(password);
+    const displayNameValidation = validateDisplayName(displayName);
+
+    const allErrors: string[] = [
+      ...emailValidation.errors,
+      ...passwordValidation.errors,
+      ...displayNameValidation.errors,
+    ];
+
+    if (allErrors.length > 0) {
+      res.status(400).json({
+        status: 400,
+        message: 'Validation failed',
+        errors: allErrors,
         requestId: req.requestId,
       });
       return;
@@ -118,6 +140,15 @@ router.post('/login', async (req: Request, res: Response) => {
       return;
     }
 
+    if (err.statusCode === 403) {
+      res.status(403).json({
+        status: 403,
+        message: err.message,
+        requestId: req.requestId,
+      });
+      return;
+    }
+
     if (err.statusCode === 423) {
       res.status(423).json({
         status: 423,
@@ -128,6 +159,66 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 
     // Unexpected error — let the error handler deal with it
+    throw err;
+  }
+});
+
+/**
+ * POST /api/v1/auth/resend-confirmation
+ * Resend a confirmation email to the user.
+ *
+ * Request body: { email: string }
+ * Success: 200
+ * Errors: 404 if user not found, 429 if rate limited
+ */
+router.post('/resend-confirmation', async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      res.status(400).json({
+        status: 400,
+        message: 'Email is required',
+        requestId: req.requestId,
+      });
+      return;
+    }
+
+    // Look up user by email
+    const user = await findByEmail(email);
+    if (!user) {
+      res.status(404).json({
+        status: 404,
+        message: 'User not found',
+        requestId: req.requestId,
+      });
+      return;
+    }
+
+    // Check rate limit: max 5 tokens created in the last hour
+    const recentCount = await countRecentTokens(user.id);
+    if (recentCount >= 5) {
+      res.status(429).json({
+        status: 429,
+        message: 'Too many resend requests. Please try again later.',
+        requestId: req.requestId,
+      });
+      return;
+    }
+
+    // Invalidate existing unused tokens
+    await invalidateExistingTokens(user.id);
+
+    // Generate new token and send confirmation email
+    const token = await generateConfirmationToken(user.id);
+    await sendConfirmationEmail(user.email, token);
+
+    res.status(200).json({
+      status: 200,
+      message: 'Confirmation email sent.',
+      requestId: req.requestId,
+    });
+  } catch (err: any) {
     throw err;
   }
 });
@@ -232,18 +323,24 @@ router.get('/confirm/:token', async (req: Request, res: Response) => {
     if (!token) {
       res.status(400).json({
         status: 400,
-        message: 'Missing confirmation token',
+        message: 'Invalid confirmation token',
         requestId: req.requestId,
       });
       return;
     }
 
-    const userId = await confirmEmail(token as string);
+    const result = await confirmEmail(token as string);
 
-    if (!userId) {
+    if (!result.success) {
+      const errorMessages: Record<string, string> = {
+        malformed: 'Invalid confirmation token',
+        expired: 'Confirmation token has expired',
+        already_used: 'Confirmation token has already been used',
+      };
+
       res.status(400).json({
         status: 400,
-        message: 'Invalid or expired confirmation token',
+        message: errorMessages[result.reason!] || 'Invalid confirmation token',
         requestId: req.requestId,
       });
       return;
@@ -251,7 +348,7 @@ router.get('/confirm/:token', async (req: Request, res: Response) => {
 
     res.status(200).json({
       status: 200,
-      message: 'Email confirmed successfully. You can now log in.',
+      message: 'Email confirmed successfully',
       requestId: req.requestId,
     });
   } catch (err: any) {
