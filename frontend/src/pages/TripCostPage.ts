@@ -132,9 +132,16 @@ export class TripCostPage {
     const tank = parseFloat((this.container.querySelector('#v-tank') as HTMLInputElement).value);
     const consumption = parseFloat((this.container.querySelector('#v-consumption') as HTMLInputElement).value);
 
+    if (!name || isNaN(tank) || isNaN(consumption)) {
+      this.error = 'Please fill in all fields.';
+      this.rerender();
+      return;
+    }
+
     try {
-      await apiClient.post('/vehicles', { name, vehicle_type, fuel_type, tank_capacity_liters: tank, consumption_per_100km: consumption });
+      await apiClient.post<any>('/vehicles', { name, vehicle_type, fuel_type, tank_capacity_liters: tank, consumption_per_100km: consumption });
       this.error = null;
+      // Force full page reload to show the new vehicle in the list
       this.rerender();
     } catch (err) {
       this.error = (err as ApiError).message || 'Failed to create vehicle.';

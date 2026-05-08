@@ -9,11 +9,15 @@ interface WizardState {
   vehicleType: VehicleType | null;
   destination: string;
   startDate: string;
+  startTime: string;
+  placeId: string;
+  lat: number;
+  lng: number;
 }
 
 export class StartPlanningPage {
   private container: HTMLElement;
-  private state: WizardState = { step: 1, vehicleType: null, destination: '', startDate: '' };
+  private state: WizardState = { step: 1, vehicleType: null, destination: '', startDate: '', startTime: '', placeId: '', lat: 0, lng: 0 };
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -99,20 +103,33 @@ export class StartPlanningPage {
 
   private stepDestination(): string {
     const today = new Date().toISOString().split('T')[0];
+    const now = new Date().toTimeString().slice(0, 5);
     return `
       <h2 class="wizard__title">Where are you headed?</h2>
-      <p class="wizard__subtitle">Enter your first destination and departure date.</p>
+      <p class="wizard__subtitle">Enter your first destination and departure date/time.</p>
       <form id="wizard-form" class="wizard__form">
         <div class="input-group">
           <label class="input-group__label" for="dest-input">Destination</label>
           <input class="input input--lg" type="text" id="dest-input"
-                 placeholder="e.g. Vienna, Austria" value="${this.state.destination}" required />
+                 placeholder="Start typing a city or address..." value="${this.state.destination}" required
+                 autocomplete="off" />
+          <div id="autocomplete-results" style="display:none;position:absolute;z-index:100;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);max-height:200px;overflow-y:auto;width:100%;margin-top:2px;"></div>
         </div>
-        <div class="input-group">
-          <label class="input-group__label" for="date-input">Departure date</label>
-          <input class="input input--lg" type="date" id="date-input"
-                 min="${today}" value="${this.state.startDate || today}" required />
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);">
+          <div class="input-group">
+            <label class="input-group__label" for="date-input">Departure date</label>
+            <input class="input input--lg" type="date" id="date-input"
+                   min="${today}" value="${this.state.startDate || today}" required />
+          </div>
+          <div class="input-group">
+            <label class="input-group__label" for="time-input">Departure time</label>
+            <input class="input input--lg" type="time" id="time-input"
+                   value="${this.state.startTime || now}" />
+          </div>
         </div>
+        <p style="font-size:var(--font-size-xs);color:var(--color-text-muted);margin-top:var(--space-1);">
+          Time is used for traffic-aware routing. Defaults to now if not set.
+        </p>
         <div class="wizard__actions">
           <button type="button" id="btn-back" class="btn btn--ghost">
             <span class="material-symbols-rounded">arrow_back</span> Back
@@ -145,23 +162,120 @@ export class StartPlanningPage {
       e.preventDefault();
       const dest = (this.container.querySelector('#dest-input') as HTMLInputElement).value.trim();
       const date = (this.container.querySelector('#date-input') as HTMLInputElement).value;
+      const time = (this.container.querySelector('#time-input') as HTMLInputElement)?.value || '';
       if (!dest || !date) return;
       this.state.destination = dest;
       this.state.startDate = date;
+      this.state.startTime = time;
+
+      // Build departure_time as Unix timestamp for traffic-aware routing
+      const departureDate = new Date(`${date}T${time || '00:00'}`);
+      const departureTime = Math.floor(departureDate.getTime() / 1000);
 
       const params = new URLSearchParams({
         vehicle: this.state.vehicleType || 'car',
         destination: dest,
         date,
+        time,
+        departure_time: departureTime.toString(),
+        ...(this.state.placeId ? { place_id: this.state.placeId } : {}),
+        ...(this.state.lat ? { lat: this.state.lat.toString(), lng: this.state.lng.toString() } : {}),
       });
       window.history.pushState({}, '', `/?${params}`);
       window.dispatchEvent(new CustomEvent('app:navigate', { detail: { path: '/' } }));
     });
+
+    // Set up Places Autocomplete if Google Maps is available
+    this.setupAutocomplete();
   }
 
   private goTo(step: 1 | 2 | 3): void {
     this.state.step = step;
     this.rerender();
+  }
+
+  private setupAutocomplete(): void {
+    const input = this.container.querySelector('#dest-input') as HTMLInputElement;
+    if (!input) return;
+
+    // Check if Google Maps Places API is available
+    if (typeof window !== 'undefined' && (window as any).google?.maps?.places) {
+      const autocomplete = new (window as any).google.maps.places.Autocomplete(input, {
+        types: ['geocode', 'establishment'],
+        componentRestrictions: { country: ['at','be','bg','hr','cz','dk','ee','fi','fr','de','gr','hu','ie','it','lv','lt','lu','nl','pl','pt','ro','sk','si','es','se','ch','no','gb'] },
+        fields: ['place_id', 'geometry', 'formatted_address', 'name'],
+      });
+
+      autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace();
+        if (place?.geometry?.location) {
+          this.state.destination = place.formatted_address || place.name || input.value;
+          this.state.placeId = place.place_id || '';
+          this.state.lat = place.geometry.location.lat();
+          this.state.lng = place.geometry.location.lng();
+          input.value = this.state.destination;
+        }
+      });
+    } else {
+      // Fallback: use our backend autocomplete API
+      let debounceTimer: ReturnType<typeof setTimeout>;
+      input.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        const query = input.value.trim();
+        if (query.length < 3) {
+          this.hideAutocomplete();
+          return;
+        }
+        debounceTimer = setTimeout(() => this.fetchAutocomplete(query), 300);
+      });
+    }
+  }
+
+  private async fetchAutocomplete(query: string): Promise<void> {
+    try {
+      const res = await fetch(`/api/v1/places/autocomplete?q=${encodeURIComponent(query)}`);
+      const json = await res.json();
+      const suggestions = json.data?.suggestions || [];
+      this.showAutocomplete(suggestions);
+    } catch {
+      this.hideAutocomplete();
+    }
+  }
+
+  private showAutocomplete(suggestions: Array<{ placeId: string; description: string }>): void {
+    const container = this.container.querySelector('#autocomplete-results') as HTMLElement;
+    if (!container || suggestions.length === 0) { this.hideAutocomplete(); return; }
+
+    container.style.display = 'block';
+    container.innerHTML = suggestions.map(s => `
+      <div class="autocomplete-item" data-place-id="${s.placeId}" data-desc="${s.description}"
+           style="padding:var(--space-2) var(--space-3);cursor:pointer;font-size:var(--font-size-sm);border-bottom:1px solid var(--color-border-light);">
+        ${s.description}
+      </div>
+    `).join('');
+
+    container.querySelectorAll('.autocomplete-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const desc = (item as HTMLElement).dataset.desc || '';
+        const placeId = (item as HTMLElement).dataset.placeId || '';
+        this.state.destination = desc;
+        this.state.placeId = placeId;
+        const input = this.container.querySelector('#dest-input') as HTMLInputElement;
+        if (input) input.value = desc;
+        this.hideAutocomplete();
+      });
+      (item as HTMLElement).addEventListener('mouseenter', () => {
+        (item as HTMLElement).style.background = 'var(--color-surface-hover)';
+      });
+      (item as HTMLElement).addEventListener('mouseleave', () => {
+        (item as HTMLElement).style.background = '';
+      });
+    });
+  }
+
+  private hideAutocomplete(): void {
+    const container = this.container.querySelector('#autocomplete-results') as HTMLElement;
+    if (container) container.style.display = 'none';
   }
 
   private rerender(): void {
