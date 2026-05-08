@@ -72,19 +72,22 @@ export class LoginPage {
 
     this.loading = true;
     this.error = null;
-    this.rerender();
+    // Update button state without full rerender (which would lose input values)
+    const btn = this.container.querySelector('button[type="submit"]') as HTMLButtonElement;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner" style="width:16px;height:16px;"></span>'; }
 
     try {
-      const res = await apiClient.post<{ data: { token: string } }>('/auth/login', { email, password });
-      const data = (res.data as any).data || res.data;
-      apiClient.setToken(data.token);
-      window.history.pushState({}, '', '/');
-      window.dispatchEvent(new CustomEvent('app:navigate', { detail: { path: '/' } }));
+      const res = await apiClient.post<any>('/auth/login', { email, password });
+      const token = res.data?.data?.token || res.data?.token;
+      if (token) {
+        apiClient.setToken(token);
+        window.history.pushState({}, '', '/');
+        window.dispatchEvent(new CustomEvent('app:navigate', { detail: { path: '/' } }));
+      } else {
+        this.showError('Unexpected response from server.');
+      }
     } catch (err) {
       this.showError((err as ApiError).message || 'Login failed.');
-    } finally {
-      this.loading = false;
-      this.rerender();
     }
   }
 
