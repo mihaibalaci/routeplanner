@@ -128,7 +128,19 @@ app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/') || req.path === '/health') {
     return next();
   }
-  res.sendFile(path.join(frontendDist, 'index.html'));
+  // Inject the Google Maps API key into the HTML so the frontend can use it
+  const fs = require('fs');
+  const indexPath = path.join(frontendDist, 'index.html');
+  try {
+    let html = fs.readFileSync(indexPath, 'utf-8');
+    const mapsKey = process.env.GOOGLE_MAPS_API_KEY || '';
+    html = html.replace('</head>', `<script>window.__GOOGLE_MAPS_API_KEY="${mapsKey}";</script>\n</head>`);
+    res.setHeader('Content-Type', 'text/html');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.send(html);
+  } catch {
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  }
 });
 
 // Error handler (must be last)
