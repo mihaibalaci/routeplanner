@@ -2,6 +2,9 @@
  * Route Planner Page — Uses Google Maps for route calculation
  */
 import { loadGoogleMaps, isMapsAvailable, createMap } from '../services/mapService';
+import { apiClient } from '../api/client';
+import { CostBreakdownPanel } from '../components/CostBreakdownPanel';
+import type { VehicleProfileResponse } from '../components/VehicleSelector';
 
 export class RoutePlannerPage {
   private container: HTMLElement;
@@ -9,6 +12,9 @@ export class RoutePlannerPage {
   private calculating = false;
   private error: string | null = null;
   private routeResult: { distance: string; duration: string } | null = null;
+  private costBreakdownPanel: CostBreakdownPanel | null = null;
+  private mediaQuery: MediaQueryList | null = null;
+  private mediaQueryHandler: ((e: MediaQueryListEvent) => void) | null = null;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -18,6 +24,8 @@ export class RoutePlannerPage {
     this.container.innerHTML = this.build();
     this.bindEvents();
     this.initMap();
+    this.initCostBreakdownPanel();
+    this.initResponsiveLayout();
   }
 
   private build(): string {
@@ -30,46 +38,52 @@ export class RoutePlannerPage {
 
         ${this.error ? `<div class="alert alert--error" style="margin-bottom:var(--space-4);">${this.error}</div>` : ''}
 
-        <div style="display:grid;grid-template-columns:380px 1fr;gap:var(--space-4);min-height:500px;">
-          <div class="card" style="align-self:start;">
-            <div class="card__title" style="margin-bottom:var(--space-4);">Waypoints</div>
-            <div style="display:flex;flex-direction:column;gap:var(--space-3);">
-              <div class="input-group">
-                <label class="input-group__label">Origin</label>
-                <input class="input" type="text" id="origin-input" placeholder="Starting point" />
-              </div>
-              <div id="stops-container"></div>
-              <div class="input-group">
-                <label class="input-group__label">Destination</label>
-                <input class="input" type="text" id="dest-input" placeholder="Final destination" />
-              </div>
-              <button id="btn-add-stop" class="btn btn--ghost" style="align-self:flex-start;">
-                <span class="material-symbols-rounded">add_location</span> Add Stop
-              </button>
-            </div>
-            <div style="margin-top:var(--space-4);">
-              <button id="btn-calculate" class="btn btn--primary btn--lg" style="width:100%;" ${this.calculating ? 'disabled' : ''}>
-                ${this.calculating ? '<span class="spinner" style="width:16px;height:16px;"></span> Calculating...' : '<span class="material-symbols-rounded">directions</span> Calculate Route'}
-              </button>
-            </div>
+        <div class="route-planner-layout">
+          <div class="route-planner-layout__main">
+            <div style="display:grid;grid-template-columns:380px 1fr;gap:var(--space-4);min-height:500px;">
+              <div class="card" style="align-self:start;">
+                <div class="card__title" style="margin-bottom:var(--space-4);">Waypoints</div>
+                <div style="display:flex;flex-direction:column;gap:var(--space-3);">
+                  <div class="input-group">
+                    <label class="input-group__label">Origin</label>
+                    <input class="input" type="text" id="origin-input" placeholder="Starting point" />
+                  </div>
+                  <div id="stops-container"></div>
+                  <div class="input-group">
+                    <label class="input-group__label">Destination</label>
+                    <input class="input" type="text" id="dest-input" placeholder="Final destination" />
+                  </div>
+                  <button id="btn-add-stop" class="btn btn--ghost" style="align-self:flex-start;">
+                    <span class="material-symbols-rounded">add_location</span> Add Stop
+                  </button>
+                </div>
+                <div style="margin-top:var(--space-4);">
+                  <button id="btn-calculate" class="btn btn--primary btn--lg" style="width:100%;" ${this.calculating ? 'disabled' : ''}>
+                    ${this.calculating ? '<span class="spinner" style="width:16px;height:16px;"></span> Calculating...' : '<span class="material-symbols-rounded">directions</span> Calculate Route'}
+                  </button>
+                </div>
 
-            ${this.routeResult ? `
-            <div style="margin-top:var(--space-4);padding:var(--space-4);background:var(--color-primary-50);border-radius:var(--radius-lg);">
-              <div style="display:flex;justify-content:space-between;margin-bottom:var(--space-2);">
-                <span style="color:var(--color-text-secondary);font-size:var(--font-size-sm);">Distance</span>
-                <strong>${this.routeResult.distance}</strong>
+                ${this.routeResult ? `
+                <div style="margin-top:var(--space-4);padding:var(--space-4);background:var(--color-primary-50);border-radius:var(--radius-lg);">
+                  <div style="display:flex;justify-content:space-between;margin-bottom:var(--space-2);">
+                    <span style="color:var(--color-text-secondary);font-size:var(--font-size-sm);">Distance</span>
+                    <strong>${this.routeResult.distance}</strong>
+                  </div>
+                  <div style="display:flex;justify-content:space-between;">
+                    <span style="color:var(--color-text-secondary);font-size:var(--font-size-sm);">Duration</span>
+                    <strong>${this.routeResult.duration}</strong>
+                  </div>
+                </div>
+                ` : ''}
               </div>
-              <div style="display:flex;justify-content:space-between;">
-                <span style="color:var(--color-text-secondary);font-size:var(--font-size-sm);">Duration</span>
-                <strong>${this.routeResult.duration}</strong>
+
+              <div class="card" style="padding:0;overflow:hidden;min-height:500px;">
+                <div id="map-container" style="width:100%;height:100%;min-height:500px;"></div>
               </div>
             </div>
-            ` : ''}
           </div>
 
-          <div class="card" style="padding:0;overflow:hidden;min-height:500px;">
-            <div id="map-container" style="width:100%;height:100%;min-height:500px;"></div>
-          </div>
+          <div id="cost-breakdown-container" class="route-planner-layout__sidebar"></div>
         </div>
       </div>
     `;
@@ -78,6 +92,64 @@ export class RoutePlannerPage {
   private bindEvents(): void {
     this.container.querySelector('#btn-add-stop')?.addEventListener('click', () => this.addStop());
     this.container.querySelector('#btn-calculate')?.addEventListener('click', () => this.calculateRoute());
+  }
+
+  private initCostBreakdownPanel(): void {
+    const panelContainer = this.container.querySelector('#cost-breakdown-container') as HTMLElement;
+    if (!panelContainer) return;
+
+    this.costBreakdownPanel = new CostBreakdownPanel({
+      container: panelContainer,
+    });
+
+    this.loadVehicleProfiles();
+  }
+
+  private initResponsiveLayout(): void {
+    this.mediaQuery = window.matchMedia('(min-width: 1024px)');
+
+    // Apply initial layout class
+    this.applyLayoutClass(this.mediaQuery.matches);
+
+    // Listen for breakpoint changes
+    this.mediaQueryHandler = (e: MediaQueryListEvent) => {
+      this.applyLayoutClass(e.matches);
+    };
+    this.mediaQuery.addEventListener('change', this.mediaQueryHandler);
+  }
+
+  private applyLayoutClass(isDesktop: boolean): void {
+    const layoutEl = this.container.querySelector('.route-planner-layout') as HTMLElement;
+    if (!layoutEl) return;
+
+    if (isDesktop) {
+      layoutEl.classList.add('route-planner-layout--desktop');
+      layoutEl.classList.remove('route-planner-layout--mobile');
+    } else {
+      layoutEl.classList.add('route-planner-layout--mobile');
+      layoutEl.classList.remove('route-planner-layout--desktop');
+    }
+  }
+
+  private destroyResponsiveLayout(): void {
+    if (this.mediaQuery && this.mediaQueryHandler) {
+      this.mediaQuery.removeEventListener('change', this.mediaQueryHandler);
+      this.mediaQuery = null;
+      this.mediaQueryHandler = null;
+    }
+  }
+
+  private async loadVehicleProfiles(): Promise<void> {
+    if (!apiClient.isAuthenticated()) return;
+
+    try {
+      const response = await apiClient.get<VehicleProfileResponse[]>('/vehicles');
+      if (response.data && this.costBreakdownPanel) {
+        this.costBreakdownPanel.setVehicleProfiles(response.data);
+      }
+    } catch {
+      // Vehicle profiles unavailable — panel will show appropriate state
+    }
   }
 
   private async initMap(): Promise<void> {
@@ -163,6 +235,7 @@ export class RoutePlannerPage {
     this.calculating = true;
     this.error = null;
     this.routeResult = null;
+    this.costBreakdownPanel?.setRouteCalculating();
     // Update button without full rerender (preserve map)
     const btn = this.container.querySelector('#btn-calculate') as HTMLButtonElement;
     if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner" style="width:16px;height:16px;"></span> Calculating...'; }
@@ -203,15 +276,83 @@ export class RoutePlannerPage {
             duration: this.formatDuration(totalDuration),
           };
           this.updateResultsUI();
+          this.saveRouteToBackend(result);
         } else {
           this.error = `Route calculation failed: ${status}`;
           this.updateResultsUI();
+          this.costBreakdownPanel?.setRouteFailed();
         }
       });
     } catch (err) {
       this.calculating = false;
       this.error = `Error: ${(err as Error).message}`;
       this.updateResultsUI();
+      this.costBreakdownPanel?.setRouteFailed();
+    }
+  }
+
+  private async saveRouteToBackend(directionsResult: any): Promise<void> {
+    if (!apiClient.isAuthenticated()) {
+      this.costBreakdownPanel?.setRouteFailed();
+      return;
+    }
+
+    try {
+      const route = directionsResult.routes[0];
+      const legs = route.legs;
+
+      // Build waypoints from the directions result
+      const backendWaypoints: Array<{
+        latitude: number;
+        longitude: number;
+        label: string;
+        waypoint_type: string;
+      }> = [];
+
+      // Origin
+      const originLeg = legs[0];
+      backendWaypoints.push({
+        latitude: originLeg.start_location.lat(),
+        longitude: originLeg.start_location.lng(),
+        label: originLeg.start_address || 'Origin',
+        waypoint_type: 'origin',
+      });
+
+      // Intermediate stops
+      for (let i = 0; i < legs.length - 1; i++) {
+        backendWaypoints.push({
+          latitude: legs[i].end_location.lat(),
+          longitude: legs[i].end_location.lng(),
+          label: legs[i].end_address || `Stop ${i + 1}`,
+          waypoint_type: 'stop',
+        });
+      }
+
+      // Destination
+      const lastLeg = legs[legs.length - 1];
+      backendWaypoints.push({
+        latitude: lastLeg.end_location.lat(),
+        longitude: lastLeg.end_location.lng(),
+        label: lastLeg.end_address || 'Destination',
+        waypoint_type: 'destination',
+      });
+
+      // Create route on backend
+      const createResponse = await apiClient.post<{ id: string }>('/routes', {
+        name: 'Route Planner Calculation',
+        waypoints: backendWaypoints,
+      });
+
+      const routeId = createResponse.data.id;
+
+      // Trigger backend route calculation to store segments
+      await apiClient.post(`/routes/${routeId}/calculate`);
+
+      // Notify the cost breakdown panel with the route ID
+      this.costBreakdownPanel?.setRouteResult(routeId);
+    } catch {
+      // Backend save failed — notify panel
+      this.costBreakdownPanel?.setRouteFailed();
     }
   }
 
@@ -261,8 +402,11 @@ export class RoutePlannerPage {
   }
 
   private rerender(): void {
+    this.destroyResponsiveLayout();
     this.container.innerHTML = this.build();
     this.bindEvents();
     this.initMap();
+    this.initCostBreakdownPanel();
+    this.initResponsiveLayout();
   }
 }

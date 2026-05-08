@@ -73,13 +73,17 @@ class ApiClient {
 
   // --- HTTP Methods ---
 
-  async get<T>(path: string, params?: Record<string, string>): Promise<ApiResponse<T>> {
+  async get<T>(
+    path: string,
+    params?: Record<string, string>,
+    options?: { signal?: AbortSignal }
+  ): Promise<ApiResponse<T>> {
     let url = `${this.baseUrl}${path}`;
     if (params) {
       const searchParams = new URLSearchParams(params);
       url += `?${searchParams.toString()}`;
     }
-    return this.request<T>(url, { method: 'GET' });
+    return this.request<T>(url, { method: 'GET', signal: options?.signal });
   }
 
   async post<T>(path: string, body?: unknown): Promise<ApiResponse<T>> {

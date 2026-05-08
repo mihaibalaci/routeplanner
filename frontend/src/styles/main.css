@@ -803,6 +803,12 @@ select.input {
 }
 
 /* ─── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .route-planner-layout--mobile .route-planner-layout__main > div {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 @media (max-width: 768px) {
   .sidebar {
     transform: translateX(-100%);
@@ -831,6 +837,196 @@ select.input {
   .calc-results__grid {
     grid-template-columns: 1fr 1fr;
   }
+}
+
+/* ─── Cost Breakdown Panel ──────────────────────────────────────────────────── */
+.cost-breakdown-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-xs);
+  transition: opacity var(--transition-slow), transform var(--transition-slow);
+}
+
+.cost-breakdown-panel__vehicle-selector {
+  margin-bottom: var(--space-4);
+}
+
+.cost-breakdown-panel__content {
+  min-height: 120px;
+}
+
+/* ─── Route Planner Responsive Layout ──────────────────────────────────────── */
+.route-planner-layout {
+  transition: all var(--transition-slow);
+}
+
+/* Desktop layout (≥1024px): sidebar to the right of the map */
+.route-planner-layout--desktop {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.route-planner-layout--desktop .route-planner-layout__main {
+  min-width: 0;
+}
+
+.route-planner-layout--desktop .route-planner-layout__sidebar {
+  min-width: 320px;
+  position: sticky;
+  top: var(--space-4);
+  max-height: calc(100vh - var(--space-8));
+  overflow-y: auto;
+}
+
+/* Mobile layout (<1024px): panel below map, full-width collapsible */
+.route-planner-layout--mobile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.route-planner-layout--mobile .route-planner-layout__main {
+  width: 100%;
+}
+
+.route-planner-layout--mobile .route-planner-layout__sidebar {
+  width: 100%;
+}
+
+.route-planner-layout--mobile .cost-breakdown-panel {
+  border-radius: var(--radius-lg);
+}
+
+/* Collapsed state for mobile */
+.route-planner-layout--mobile .cost-breakdown-panel__details {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height var(--transition-slow);
+}
+
+.route-planner-layout--mobile .cost-breakdown-panel[data-state="loaded"] .cost-breakdown-panel__details {
+  max-height: 2000px;
+}
+
+.cost-breakdown-panel__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-8) var(--space-4);
+}
+
+.cost-breakdown-panel__empty .cost-breakdown-panel__icon {
+  font-size: 48px;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-4);
+}
+
+.cost-breakdown-panel__title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: var(--space-2);
+}
+
+.cost-breakdown-panel__text {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.cost-breakdown-panel__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8) var(--space-4);
+  gap: var(--space-4);
+}
+
+.cost-breakdown-panel__spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+.cost-breakdown-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) 0;
+}
+
+.cost-breakdown-panel__total {
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.cost-breakdown-panel__toggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  transition: color var(--transition-fast);
+}
+
+.cost-breakdown-panel__toggle:hover {
+  color: var(--color-text);
+}
+
+.cost-breakdown-panel__error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-8) var(--space-4);
+  gap: var(--space-3);
+}
+
+.cost-breakdown-panel__error .cost-breakdown-panel__icon {
+  font-size: 48px;
+  color: var(--color-danger);
+}
+
+.cost-breakdown-panel__error-message {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.cost-breakdown-panel__retry-btn {
+  padding: var(--space-2) var(--space-4);
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cost-breakdown-panel__retry-btn:hover:not(:disabled) {
+  background: var(--color-surface-hover);
+  border-color: var(--color-text-muted);
+}
+
+.cost-breakdown-panel__retry-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ─── Empty States ─────────────────────────────────────────────────────────── */

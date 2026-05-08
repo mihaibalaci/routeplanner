@@ -19,6 +19,7 @@ import tripsRouter from './routes/trips';
 import refuelRouter from './routes/refuel';
 import vignettesRouter from './routes/vignettes';
 import usersRouter from './routes/users';
+import costBreakdownRouter from './routes/costBreakdown';
 
 dotenv.config();
 
@@ -107,6 +108,7 @@ app.use('/api/v1/trips', tripsRouter);
 app.use('/api/v1/refuel', refuelRouter);
 app.use('/api/v1/vignettes', vignettesRouter);
 app.use('/api/v1/users', usersRouter);
+app.use('/api/v1/cost-breakdown', costBreakdownRouter);
 
 // Serve frontend static files (production)
 const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
