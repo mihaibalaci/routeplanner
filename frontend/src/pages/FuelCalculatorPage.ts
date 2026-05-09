@@ -3,6 +3,7 @@
  */
 
 type UnitSystem = 'imperial' | 'metric';
+type EnergyMode = 'fuel' | 'electric';
 
 interface CalcResult {
   fuelNeeded: number;
@@ -15,6 +16,7 @@ interface CalcResult {
 export class FuelCalculatorPage {
   private container: HTMLElement;
   private units: UnitSystem = 'metric';
+  private energyMode: EnergyMode = 'fuel';
   private distance = 0;
   private efficiency = 0;
   private price = 0;
@@ -35,9 +37,14 @@ export class FuelCalculatorPage {
   }
 
   private build(): string {
+    const isElectric = this.energyMode === 'electric';
     const distLabel = this.units === 'imperial' ? 'Distance (miles)' : 'Distance (km)';
-    const effLabel = this.units === 'imperial' ? 'Fuel efficiency (MPG)' : 'Consumption (L/100km)';
-    const priceLabel = this.units === 'imperial' ? 'Price per gallon ($)' : 'Price per liter (€)';
+    const effLabel = isElectric
+      ? 'Consumption (kWh/100km)'
+      : this.units === 'imperial' ? 'Fuel efficiency (MPG)' : 'Consumption (L/100km)';
+    const priceLabel = isElectric
+      ? 'Electricity price (€/kWh)'
+      : this.units === 'imperial' ? 'Price per gallon ($)' : 'Price per liter (€)';
 
     return `
       <div class="fade-up">
@@ -47,6 +54,16 @@ export class FuelCalculatorPage {
         </div>
 
         <div class="card card--elevated">
+          <div class="calc-toggle" style="margin-bottom:var(--space-3);">
+            <button class="calc-toggle__btn ${this.energyMode === 'fuel' ? 'is-active' : ''}" data-mode="fuel">
+              <span class="material-symbols-rounded" style="font-size:16px;">local_gas_station</span> Fuel
+            </button>
+            <button class="calc-toggle__btn ${this.energyMode === 'electric' ? 'is-active' : ''}" data-mode="electric">
+              <span class="material-symbols-rounded" style="font-size:16px;">electric_car</span> Electric
+            </button>
+          </div>
+
+          ${!isElectric ? `
           <div class="calc-toggle">
             <button class="calc-toggle__btn ${this.units === 'metric' ? 'is-active' : ''}" data-unit="metric">
               Metric (km, L/100km)
@@ -54,7 +71,7 @@ export class FuelCalculatorPage {
             <button class="calc-toggle__btn ${this.units === 'imperial' ? 'is-active' : ''}" data-unit="imperial">
               Imperial (mi, MPG)
             </button>
-          </div>
+          </div>` : ''}
 
           <div style="display:flex;flex-direction:column;gap:var(--space-4);">
             <div class="input-group">
@@ -63,11 +80,11 @@ export class FuelCalculatorPage {
             </div>
             <div class="input-group">
               <label class="input-group__label">${effLabel}</label>
-              <input class="input input--lg" type="number" id="calc-eff" min="0.1" step="0.1" value="${this.efficiency || ''}" placeholder="${this.units === 'imperial' ? 'e.g. 30' : 'e.g. 7.5'}" />
+              <input class="input input--lg" type="number" id="calc-eff" min="0.1" step="0.1" value="${this.efficiency || ''}" placeholder="${isElectric ? 'e.g. 15' : this.units === 'imperial' ? 'e.g. 30' : 'e.g. 7.5'}" />
             </div>
             <div class="input-group">
               <label class="input-group__label">${priceLabel}</label>
-              <input class="input input--lg" type="number" id="calc-price" min="0.01" step="0.01" value="${this.price || ''}" placeholder="${this.units === 'imperial' ? 'e.g. 3.50' : 'e.g. 1.65'}" />
+              <input class="input input--lg" type="number" id="calc-price" min="0.01" step="0.01" value="${this.price || ''}" placeholder="${isElectric ? 'e.g. 0.30' : this.units === 'imperial' ? 'e.g. 3.50' : 'e.g. 1.65'}" />
             </div>
           </div>
 
@@ -111,9 +128,10 @@ export class FuelCalculatorPage {
 
   private buildResults(): string {
     if (!this.result) return '';
-    const volUnit = this.units === 'imperial' ? 'gal' : 'L';
-    const distUnit = this.units === 'imperial' ? 'mi' : 'km';
-    const curr = this.units === 'imperial' ? '$' : '€';
+    const isElectric = this.energyMode === 'electric';
+    const volUnit = isElectric ? 'kWh' : this.units === 'imperial' ? 'gal' : 'L';
+    const distUnit = this.units === 'imperial' && !isElectric ? 'mi' : 'km';
+    const curr = isElectric ? '€' : this.units === 'imperial' ? '$' : '€';
 
     return `
       <div class="calc-results">
@@ -124,7 +142,7 @@ export class FuelCalculatorPage {
             <span class="calc-result-item__value">${curr}${this.result.totalCost.toFixed(2)}</span>
           </div>
           <div class="calc-result-item">
-            <span class="calc-result-item__label">Fuel needed</span>
+            <span class="calc-result-item__label">${isElectric ? 'Energy needed' : 'Fuel needed'}</span>
             <span class="calc-result-item__value">${this.result.fuelNeeded.toFixed(1)} ${volUnit}</span>
           </div>
           <div class="calc-result-item">
@@ -147,7 +165,15 @@ export class FuelCalculatorPage {
   }
 
   private bindEvents(): void {
-    this.container.querySelectorAll('.calc-toggle__btn').forEach(btn => {
+    this.container.querySelectorAll('[data-mode]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        this.energyMode = (e.currentTarget as HTMLElement).dataset.mode as EnergyMode;
+        this.result = null;
+        this.rerender();
+      });
+    });
+
+    this.container.querySelectorAll('[data-unit]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         this.units = (e.currentTarget as HTMLElement).dataset.unit as UnitSystem;
         this.result = null;
@@ -191,8 +217,22 @@ export class FuelCalculatorPage {
   private calculate(): void {
     if (!this.distance || !this.efficiency || !this.price) return;
     const dist = this.roundTrip ? this.distance * 2 : this.distance;
-    const fuel = this.units === 'imperial' ? dist / this.efficiency : (this.efficiency * dist) / 100;
-    const cost = fuel * this.price;
+
+    let fuel: number;
+    let cost: number;
+
+    if (this.energyMode === 'electric') {
+      // Electric: (distance / 100) × consumption_kWh × price_per_kWh
+      fuel = (this.efficiency * dist) / 100; // kWh needed
+      cost = fuel * this.price;
+    } else if (this.units === 'imperial') {
+      fuel = dist / this.efficiency;
+      cost = fuel * this.price;
+    } else {
+      fuel = (this.efficiency * dist) / 100;
+      cost = fuel * this.price;
+    }
+
     this.result = {
       fuelNeeded: fuel,
       totalCost: Math.round(cost * 100) / 100,

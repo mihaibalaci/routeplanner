@@ -14,7 +14,7 @@
 import { apiClient } from '../api/client';
 import type { CostBreakdownData, PanelState, VignetteDuration, RoadCosts } from '../services/costCalculations';
 import { formatEur, calculateRoadCostsSubtotal } from '../services/costCalculations';
-import { VehicleSelector, type VehicleProfileResponse } from './VehicleSelector';
+import { type VehicleProfileResponse } from './VehicleSelector';
 
 export interface CostBreakdownPanelOptions {
   container: HTMLElement;
@@ -26,7 +26,6 @@ const TIMEOUT_MS = 15_000;
 
 export class CostBreakdownPanel {
   private container: HTMLElement;
-  private onVehicleChange?: (vehicleId: string) => void;
 
   private state: PanelState = 'empty';
   private collapsed: boolean = false;
@@ -39,14 +38,11 @@ export class CostBreakdownPanel {
 
   private selectedVehicleProfile: VehicleProfileResponse | null = null;
   private vehicleProfiles: VehicleProfileResponse[] = [];
-  private vehicleSelector: VehicleSelector | null = null;
-  private vehicleSelectorContainer: HTMLElement | null = null;
   private abortController: AbortController | null = null;
   private timeoutWithData: boolean = false;
 
   constructor(options: CostBreakdownPanelOptions) {
     this.container = options.container;
-    this.onVehicleChange = options.onVehicleChange;
     this.render();
   }
 
@@ -104,9 +100,6 @@ export class CostBreakdownPanel {
    */
   setVehicleProfiles(profiles: VehicleProfileResponse[]): void {
     this.vehicleProfiles = profiles;
-    if (this.vehicleSelector) {
-      this.vehicleSelector.setProfiles(profiles);
-    }
   }
 
   /**
@@ -170,10 +163,6 @@ export class CostBreakdownPanel {
    */
   destroy(): void {
     this.abortPendingRequest();
-    if (this.vehicleSelector) {
-      this.vehicleSelector.destroy();
-      this.vehicleSelector = null;
-    }
     this.container.innerHTML = '';
   }
 
@@ -203,10 +192,12 @@ export class CostBreakdownPanel {
     this.render();
   }
 
-  private handleVehicleChange(vehicleId: string): void {
+  /**
+   * Set the selected vehicle externally (called by RoutePlannerPage when vehicle list selection changes).
+   */
+  setSelectedVehicle(vehicleId: string): void {
     this.selectedVehicleId = vehicleId;
     this.selectedVehicleProfile = this.vehicleProfiles.find(p => p.id === vehicleId) || null;
-    this.onVehicleChange?.(vehicleId);
 
     if (this.routeId) {
       this.state = 'loading';
@@ -304,25 +295,6 @@ export class CostBreakdownPanel {
     const panel = document.createElement('div');
     panel.className = 'cost-breakdown-panel';
     panel.setAttribute('data-state', this.state);
-
-    // Vehicle selector container (always present)
-    this.vehicleSelectorContainer = document.createElement('div');
-    this.vehicleSelectorContainer.className = 'cost-breakdown-panel__vehicle-selector';
-    panel.appendChild(this.vehicleSelectorContainer);
-
-    // Initialize vehicle selector if not already done
-    if (!this.vehicleSelector) {
-      this.vehicleSelector = new VehicleSelector({
-        container: this.vehicleSelectorContainer,
-        onSelect: (vehicleId) => this.handleVehicleChange(vehicleId),
-      });
-    } else {
-      this.vehicleSelector = new VehicleSelector({
-        container: this.vehicleSelectorContainer,
-        onSelect: (vehicleId) => this.handleVehicleChange(vehicleId),
-      });
-    }
-    this.vehicleSelector.render();
 
     // Content area based on state
     const content = document.createElement('div');

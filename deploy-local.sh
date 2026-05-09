@@ -79,11 +79,25 @@ PORT=3000
 DATABASE_URL=postgresql://routeplanner:routeplanner123@localhost:5432/routeplanner
 REDIS_URL=redis://localhost:6379
 JWT_SECRET=${JWT_SECRET}
-GOOGLE_MAPS_API_KEY=YOUR_GOOGLE_MAPS_API_KEY_HERE
 EOF
   echo "  Created .env with generated JWT_SECRET"
 else
   echo "  .env already exists, keeping current config"
+fi
+
+# Create secrets file (if not exists) — never overwritten by deploys
+mkdir -p ${APP_DIR}/config
+if [ ! -f "${APP_DIR}/config/secrets.env" ]; then
+  cat > ${APP_DIR}/config/secrets.env << EOF
+# Secrets — this file is never overwritten by deploy.
+# Edit directly to set your API keys.
+GOOGLE_MAPS_API_KEY=YOUR_GOOGLE_MAPS_API_KEY_HERE
+GOOGLE_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID_HERE
+CHARGEMAP_API_URL=https://api.chargemap.com/v1
+EOF
+  echo "  Created config/secrets.env — edit to set API keys"
+else
+  echo "  config/secrets.env already exists, keeping current secrets"
 fi
 
 # Run database migrations
@@ -105,6 +119,7 @@ ExecStart=/usr/bin/node /opt/routeplanner/dist/index.js
 Restart=on-failure
 RestartSec=5
 EnvironmentFile=/opt/routeplanner/.env
+EnvironmentFile=-/opt/routeplanner/config/secrets.env
 
 [Install]
 WantedBy=multi-user.target

@@ -6,7 +6,6 @@ import { apiClient } from '../api/client';
 import { CostBreakdownPanel } from '../components/CostBreakdownPanel';
 import { ChargingStationLayer } from '../components/ChargingStationLayer';
 import { VehicleListComponent, type VehicleProfileResponse } from '../components/VehicleListComponent';
-import { VehicleDetailPanel } from '../components/VehicleDetailPanel';
 
 export class RoutePlannerPage {
   private container: HTMLElement;
@@ -16,7 +15,6 @@ export class RoutePlannerPage {
   private routeResult: { distance: string; duration: string } | null = null;
   private costBreakdownPanel: CostBreakdownPanel | null = null;
   private vehicleListComponent: VehicleListComponent | null = null;
-  private vehicleDetailPanel: VehicleDetailPanel | null = null;
   private chargingStationLayer: ChargingStationLayer | null = null;
   private selectedVehicleType: string | null = null;
   private routeBounds: google.maps.LatLngBounds | null = null;
@@ -34,7 +32,6 @@ export class RoutePlannerPage {
     this.initMap();
     this.initVehicleList();
     this.initCostBreakdownPanel();
-    this.initVehicleDetailPanel();
     this.initResponsiveLayout();
   }
 
@@ -50,8 +47,8 @@ export class RoutePlannerPage {
 
         <div class="route-planner-layout">
           <div class="route-planner-layout__main">
-            <div style="display:grid;grid-template-columns:340px 1fr;gap:var(--space-4);min-height:500px;">
-              <div style="display:flex;flex-direction:column;gap:var(--space-4);">
+            <div style="display:grid;grid-template-columns:340px 1fr;gap:var(--space-4);min-height:calc(100vh - 200px);">
+              <div style="display:flex;flex-direction:column;gap:var(--space-4);max-height:calc(100vh - 200px);overflow-y:auto;">
                 <div class="card" style="align-self:start;">
                   <div class="card__title" style="margin-bottom:var(--space-4);">Waypoints</div>
                   <div style="display:flex;flex-direction:column;gap:var(--space-3);">
@@ -85,6 +82,9 @@ export class RoutePlannerPage {
                       <strong>${this.routeResult.duration}</strong>
                     </div>
                   </div>
+                  <button id="btn-save-route" class="btn btn--ghost" style="width:100%;margin-top:var(--space-3);">
+                    <span class="material-symbols-rounded">bookmark_add</span> Save Route
+                  </button>
                   ` : ''}
                 </div>
 
@@ -92,14 +92,13 @@ export class RoutePlannerPage {
                 <div id="cost-breakdown-container"></div>
               </div>
 
-              <div class="card" style="padding:0;overflow:hidden;min-height:500px;">
-                <div id="map-container" style="width:100%;height:100%;min-height:500px;"></div>
+              <div class="card" style="padding:0;overflow:hidden;min-height:calc(100vh - 200px);">
+                <div id="map-container" style="width:100%;height:100%;min-height:calc(100vh - 200px);"></div>
               </div>
             </div>
           </div>
         </div>
 
-        <div id="vehicle-detail-container"></div>
       </div>
     `;
   }
@@ -107,6 +106,7 @@ export class RoutePlannerPage {
   private bindEvents(): void {
     this.container.querySelector('#btn-add-stop')?.addEventListener('click', () => this.addStop());
     this.container.querySelector('#btn-calculate')?.addEventListener('click', () => this.calculateRoute());
+    this.container.querySelector('#btn-save-route')?.addEventListener('click', () => this.saveRouteToHistory());
   }
 
   private initVehicleList(): void {
@@ -127,19 +127,6 @@ export class RoutePlannerPage {
 
     this.costBreakdownPanel = new CostBreakdownPanel({
       container: panelContainer,
-      onVehicleChange: (vehicleId: string) => this.handleVehicleChange(vehicleId),
-    });
-  }
-
-  private initVehicleDetailPanel(): void {
-    const detailContainer = this.container.querySelector('#vehicle-detail-container') as HTMLElement;
-    if (!detailContainer) return;
-
-    this.vehicleDetailPanel = new VehicleDetailPanel({
-      container: detailContainer,
-      onClose: () => {
-        // Panel closed — no additional action needed
-      },
     });
   }
 
@@ -147,9 +134,9 @@ export class RoutePlannerPage {
     const profile = this.vehicleProfiles.find((p) => p.id === vehicleId);
     this.selectedVehicleType = profile?.vehicle_type ?? null;
 
-    // Open the detail panel for the selected vehicle
-    if (profile && this.vehicleDetailPanel) {
-      this.vehicleDetailPanel.show(profile as any);
+    // Update cost breakdown panel with selected vehicle
+    if (this.costBreakdownPanel) {
+      this.costBreakdownPanel.setSelectedVehicle(vehicleId);
     }
 
     // Update charging station layer visibility based on vehicle type
@@ -489,6 +476,16 @@ export class RoutePlannerPage {
     }
   }
 
+  private async saveRouteToHistory(): Promise<void> {
+    const btn = this.container.querySelector('#btn-save-route') as HTMLButtonElement;
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="material-symbols-rounded">check</span> Saved!';
+      btn.classList.remove('btn--ghost');
+      btn.classList.add('btn--primary');
+    }
+  }
+
   private formatDuration(seconds: number): string {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
@@ -501,9 +498,6 @@ export class RoutePlannerPage {
       this.vehicleListComponent.destroy();
       this.vehicleListComponent = null;
     }
-    if (this.vehicleDetailPanel) {
-      this.vehicleDetailPanel.hide();
-    }
     if (this.chargingStationLayer) {
       this.chargingStationLayer.destroy();
       this.chargingStationLayer = null;
@@ -513,7 +507,6 @@ export class RoutePlannerPage {
     this.initMap();
     this.initVehicleList();
     this.initCostBreakdownPanel();
-    this.initVehicleDetailPanel();
     this.initResponsiveLayout();
   }
 }

@@ -22,6 +22,8 @@ import usersRouter from './routes/users';
 import costBreakdownRouter from './routes/costBreakdown';
 
 dotenv.config();
+// Load secrets from config/secrets.env (not overwritten by deploys)
+dotenv.config({ path: path.resolve(__dirname, '../config/secrets.env'), override: true });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -113,6 +115,7 @@ app.use('/api/v1/cost-breakdown', costBreakdownRouter);
 // Serve frontend static files (production)
 const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
 app.use(express.static(frontendDist, {
+  index: false, // Don't serve index.html automatically — SPA fallback handles it with API key injection
   // Cache hashed assets (they have unique filenames) for 1 year
   setHeaders: (res, filePath) => {
     if (filePath.includes('/assets/')) {

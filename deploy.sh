@@ -48,6 +48,10 @@ rsync -avz --delete \
   --exclude 'frontend/dist' \
   --exclude '.git' \
   --exclude '.env' \
+  --exclude '.env.local' \
+  --exclude '.env.*.local' \
+  --exclude 'config/secrets.env' \
+  --exclude 'client_secret_*.json' \
   "${PROJECT_DIR}/" ${REMOTE}:${APP_DIR}/
 
 # Step 5: Install dependencies and build on remote
@@ -56,16 +60,34 @@ ssh ${REMOTE} "cd ${APP_DIR} && npm install --production=false"
 ssh ${REMOTE} "cd ${APP_DIR} && npx tsc"
 ssh ${REMOTE} "cd ${APP_DIR}/frontend && npm install && npx vite build"
 
-# Step 6: Create environment file
+# Step 6: Create environment file (only if it doesn't exist)
 echo "[6/6] Creating environment configuration..."
-ssh ${REMOTE} "cat > ${APP_DIR}/.env << 'EOF'
+ssh ${REMOTE} "if [ ! -f ${APP_DIR}/.env ]; then
+  cat > ${APP_DIR}/.env << 'ENVEOF'
 NODE_ENV=production
 PORT=3000
 DATABASE_URL=postgresql://routeplanner:routeplanner123@localhost:5432/routeplanner
 REDIS_URL=redis://localhost:6379
 JWT_SECRET=$(openssl rand -base64 32)
+ENVEOF
+  echo '  Created .env (first deploy)'
+else
+  echo '  .env already exists — not overwriting'
+fi"
+
+# Create secrets file (only if it doesn't exist)
+ssh ${REMOTE} "mkdir -p ${APP_DIR}/config && if [ ! -f ${APP_DIR}/config/secrets.env ]; then
+  cat > ${APP_DIR}/config/secrets.env << 'SECEOF'
+# Secrets — this file is never overwritten by deploy.sh
+# Edit this file directly on the server to set API keys.
 GOOGLE_MAPS_API_KEY=YOUR_GOOGLE_MAPS_API_KEY_HERE
-EOF"
+GOOGLE_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID_HERE
+CHARGEMAP_API_URL=https://api.chargemap.com/v1
+SECEOF
+  echo '  Created config/secrets.env (first deploy) — edit on server to set keys'
+else
+  echo '  config/secrets.env already exists — not overwriting'
+fi"
 
 # Run database migrations
 echo "Running database migrations..."
@@ -87,6 +109,7 @@ Restart=on-failure
 RestartSec=5
 Environment=NODE_ENV=production
 EnvironmentFile=/opt/routeplanner/.env
+EnvironmentFile=-/opt/routeplanner/config/secrets.env
 
 [Install]
 WantedBy=multi-user.target

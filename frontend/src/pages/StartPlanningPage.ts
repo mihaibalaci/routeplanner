@@ -2,7 +2,7 @@
  * Start Planning Page — Modern wizard
  */
 
-type VehicleType = 'car' | 'motorcycle' | 'camper';
+type VehicleType = 'car' | 'motorcycle' | 'camper' | 'ev';
 
 interface WizardState {
   step: 1 | 2 | 3;
@@ -78,6 +78,7 @@ export class StartPlanningPage {
       { type: 'car', icon: 'directions_car', name: 'Car', desc: 'Sedans, SUVs, hatchbacks' },
       { type: 'motorcycle', icon: 'two_wheeler', name: 'Motorcycle', desc: 'Vignette-exempt in some countries' },
       { type: 'camper', icon: 'rv_hookup', name: 'Camper', desc: 'RVs and motorhomes' },
+      { type: 'ev', icon: 'electric_car', name: 'EV ⚡', desc: 'Electric vehicles with charging stops' },
     ];
 
     return `
