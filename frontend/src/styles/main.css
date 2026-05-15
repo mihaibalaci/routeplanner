@@ -1465,3 +1465,76 @@ select.input {
   background: var(--color-bg-subtle);
   color: var(--color-text-secondary);
 }
+
+/* ─── Disabled Field Style ─────────────────────────────────────────────────── */
+.field-disabled {
+  opacity: 0.4;
+  pointer-events: none;
+  user-select: none;
+}
+
+.field-disabled .input,
+.field-disabled select {
+  background: var(--color-bg-subtle);
+  cursor: not-allowed;
+}
+
+/* ─── Vehicle Accordion (Route Planner) ────────────────────────────────────── */
+.vehicle-accordion .vehicle-list__grid {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.vehicle-accordion .vehicle-list__card {
+  transition: transform 0.3s ease, opacity 0.3s ease, max-height 0.3s ease, margin 0.3s ease;
+  transform-origin: top center;
+  max-height: 200px;
+  cursor: pointer;
+}
+
+/* When collapsed: hide all non-selected cards */
+.vehicle-accordion.collapsed .vehicle-list__card {
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-8px);
+  overflow: hidden;
+  margin: 0;
+  pointer-events: none;
+}
+
+/* Selected card is always visible — acts as the expand/collapse trigger */
+.vehicle-accordion.collapsed .vehicle-list__card--selected {
+  max-height: 200px;
+  opacity: 1;
+  transform: translateY(0);
+  overflow: visible;
+  pointer-events: auto;
+  margin-bottom: 0;
+}
+
+/* When expanded: show all cards normally */
+.vehicle-accordion:not(.collapsed) .vehicle-list__card {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.vehicle-accordion .vehicle-accordion__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border: none;
+  background: none;
+  width: 100%;
+  transition: color 0.15s;
+}
+
+.vehicle-accordion .vehicle-accordion__toggle:hover {
+  color: var(--color-primary);
+}

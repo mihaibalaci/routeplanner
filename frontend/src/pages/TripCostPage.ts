@@ -52,6 +52,22 @@ export class TripCostPage {
             </div>
           </div>
 
+          <div class="card" style="grid-column:1/3;">
+            <div class="card__title">
+              <span class="material-symbols-rounded" style="vertical-align:middle;margin-right:var(--space-2);">toll</span>
+              Vignette Requirements
+            </div>
+            <div class="card__subtitle" style="margin-bottom:var(--space-4);">Countries on your route that require a vignette.</div>
+            <div class="input-group" style="margin-bottom:var(--space-4);max-width:300px;">
+              <label class="input-group__label">Route ID</label>
+              <input class="input" type="text" id="vignette-route-id" placeholder="Enter route ID" />
+            </div>
+            <button id="btn-load-vignettes" class="btn btn--secondary">
+              <span class="material-symbols-rounded">search</span> Load Vignettes
+            </button>
+            <div id="vignette-result" style="margin-top:var(--space-4);"></div>
+          </div>
+
           <div class="card" style="grid-column:1/3;" id="create-vehicle-form" hidden>
             <div class="card__title">New Vehicle Profile</div>
             <form id="vehicle-form" style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4);margin-top:var(--space-4);">
@@ -65,6 +81,7 @@ export class TripCostPage {
                   <option value="car">Car</option>
                   <option value="motorcycle">Motorcycle</option>
                   <option value="camper">Camper</option>
+                  <option value="ev">EV ⚡</option>
                 </select>
               </div>
               <div class="input-group">
@@ -105,6 +122,7 @@ export class TripCostPage {
       if (form) form.hidden = true;
     });
     this.container.querySelector('#vehicle-form')?.addEventListener('submit', (e) => this.createVehicle(e));
+    this.container.querySelector('#btn-load-vignettes')?.addEventListener('click', () => this.loadVignettes());
     this.loadVehicles();
   }
 
@@ -146,6 +164,75 @@ export class TripCostPage {
     } catch (err) {
       this.error = (err as ApiError).message || 'Failed to create vehicle.';
       this.rerender();
+    }
+  }
+
+  private async loadVignettes(): Promise<void> {
+    const routeId = (this.container.querySelector('#vignette-route-id') as HTMLInputElement)?.value.trim();
+    if (!routeId) return;
+
+    const vehicleType = (this.container.querySelector('#vehicle-select') as HTMLSelectElement)?.value;
+    const resultDiv = this.container.querySelector('#vignette-result') as HTMLElement;
+    if (!resultDiv) return;
+
+    resultDiv.innerHTML = '<div style="text-align:center;padding:var(--space-4);"><div class="cost-breakdown-panel__spinner"></div></div>';
+
+    try {
+      const params: Record<string, string> = {};
+      if (vehicleType) params.vehicle_type = vehicleType;
+
+      const res = await apiClient.get<any>(`/vignettes/route/${routeId}`, params);
+      const requirements = res.data?.requirements || res.data?.data?.requirements || [];
+
+      if (!Array.isArray(requirements) || requirements.length === 0) {
+        resultDiv.innerHTML = `
+          <div style="text-align:center;padding:var(--space-4);color:var(--color-text-secondary);">
+            <span class="material-symbols-rounded" style="font-size:32px;">check_circle</span>
+            <p style="margin-top:var(--space-2);">No vignettes required for this route.</p>
+          </div>
+        `;
+        return;
+      }
+
+      const rows = requirements.map((req: any) => {
+        const prices = req.prices || req.durations || [];
+        const priceList = Array.isArray(prices)
+          ? prices.map((p: any) => `<span class="badge badge--neutral">${p.duration || p}: €${(p.price_eur || p.price || 0).toFixed(2)}</span>`).join(' ')
+          : '';
+
+        return `
+          <tr>
+            <td style="padding:var(--space-2) var(--space-3);font-weight:500;">
+              ${req.country_name || req.country_code}
+            </td>
+            <td style="padding:var(--space-2) var(--space-3);">
+              ${req.required ? '<span class="badge badge--error">Required</span>' : '<span class="badge badge--success">Not required</span>'}
+            </td>
+            <td style="padding:var(--space-2) var(--space-3);">
+              ${priceList || '—'}
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      resultDiv.innerHTML = `
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:var(--font-size-sm);">
+            <thead>
+              <tr style="border-bottom:1px solid var(--color-border);text-align:left;">
+                <th style="padding:var(--space-2) var(--space-3);">Country</th>
+                <th style="padding:var(--space-2) var(--space-3);">Status</th>
+                <th style="padding:var(--space-2) var(--space-3);">Available Durations & Prices</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      `;
+    } catch (err) {
+      resultDiv.innerHTML = `
+        <div class="alert alert--error">Failed to load vignette data: ${(err as any).message || 'Unknown error'}</div>
+      `;
     }
   }
 

@@ -1,8 +1,48 @@
 import { Router, Request, Response } from 'express';
 import { getPrice, FUEL_TYPES } from '../services/fuelPriceService';
 import { findStationsNearPoint } from '../services/refuelAdvisorService';
+import { query } from '../utils/database';
 
 const router = Router();
+
+/**
+ * GET /api/v1/fuel/prices/latest
+ * Returns the latest average fuel/energy prices (no auth required).
+ * Used for the Route Planner info badge.
+ */
+router.get('/prices/latest', async (_req: Request, res: Response) => {
+  try {
+    const result = await query(
+      `SELECT fuel_type, ROUND(AVG(price_per_liter_eur)::numeric, 3) as avg_price
+       FROM fuel_prices
+       WHERE expires_at > NOW()
+       GROUP BY fuel_type
+       ORDER BY fuel_type`
+    );
+
+    const prices: Record<string, number> = {};
+    for (const row of result.rows) {
+      prices[row.fuel_type] = parseFloat(row.avg_price);
+    }
+
+    // Add electricity price if not in DB (default estimate)
+    if (!prices['electric']) {
+      prices['electric'] = 0.30; // €/kWh average estimate
+    }
+
+    res.status(200).json({
+      status: 200,
+      data: prices,
+      requestId: (_req as any).requestId,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      status: 500,
+      message: 'Failed to fetch latest prices',
+      requestId: (_req as any).requestId,
+    });
+  }
+});
 
 /**
  * GET /api/v1/fuel/prices?country={code}&type={fuel_type}

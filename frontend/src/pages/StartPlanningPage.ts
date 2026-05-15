@@ -145,7 +145,7 @@ export class StartPlanningPage {
   }
 
   private bindEvents(): void {
-    this.container.querySelector('#btn-start')?.addEventListener('click', () => this.goTo(2));
+    this.container.querySelector('#btn-start')?.addEventListener('click', () => this.handleStart());
 
     this.container.querySelectorAll('.vehicle-option').forEach(el => {
       el.addEventListener('click', (e) => {
@@ -277,6 +277,69 @@ export class StartPlanningPage {
   private hideAutocomplete(): void {
     const container = this.container.querySelector('#autocomplete-results') as HTMLElement;
     if (container) container.style.display = 'none';
+  }
+
+  private async handleStart(): Promise<void> {
+    const btn = this.container.querySelector('#btn-start') as HTMLButtonElement;
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner" style="width:16px;height:16px;"></span> Locating...';
+    }
+
+    try {
+      // Try to get GPS location with 10s timeout
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject(new Error('Geolocation not supported'));
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: false,
+          timeout: 10000,
+          maximumAge: 60000,
+        });
+      });
+
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+
+      // Store coordinates — will be used to auto-populate origin in Route Planner
+      const locationData = { lat, lng, address: '' };
+
+      // Try reverse geocoding if Google Maps is available
+      if ((window as any).google?.maps?.Geocoder) {
+        try {
+          const geocoder = new (window as any).google.maps.Geocoder();
+          const result = await new Promise<any>((resolve, reject) => {
+            geocoder.geocode({ location: { lat, lng } }, (results: any[], status: string) => {
+              if (status === 'OK' && results[0]) resolve(results[0]);
+              else reject(new Error(status));
+            });
+          });
+          locationData.address = result.formatted_address || '';
+        } catch {
+          locationData.address = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        }
+      } else {
+        locationData.address = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+      }
+
+      // Store in sessionStorage for Route Planner to pick up
+      sessionStorage.setItem('routeplanner_start_location', JSON.stringify(locationData));
+      this.goTo(2);
+    } catch {
+      // GPS unavailable or denied — show message and continue
+      const wizard = this.container.querySelector('.wizard__content');
+      if (wizard) {
+        const notice = document.createElement('div');
+        notice.className = 'alert alert--error';
+        notice.style.marginTop = 'var(--space-3)';
+        notice.textContent = 'Unable to retrieve your current location. Please enter it manually.';
+        wizard.appendChild(notice);
+      }
+      // Navigate to step 2 after a brief delay
+      setTimeout(() => this.goTo(2), 1500);
+    }
   }
 
   private rerender(): void {

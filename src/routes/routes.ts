@@ -17,6 +17,49 @@ import { exportRoute } from '../services/routeExportService';
 const router = Router();
 
 /**
+ * GET /api/v1/routes
+ * List all routes for the authenticated user, ordered by most recent.
+ * Returns route summary with waypoint labels for origin/destination.
+ */
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    const userId = req.userId;
+    if (!userId) {
+      res.status(401).json({ status: 401, message: 'Authentication required', requestId: req.requestId });
+      return;
+    }
+
+    const result = await query(
+      `SELECT r.id, r.name, r.total_distance_km, r.total_duration_seconds, r.status, r.created_at,
+              (SELECT label FROM waypoints WHERE route_id = r.id AND waypoint_type = 'origin' ORDER BY position LIMIT 1) as origin_label,
+              (SELECT label FROM waypoints WHERE route_id = r.id AND waypoint_type = 'destination' ORDER BY position DESC LIMIT 1) as destination_label,
+              (SELECT COUNT(*) FROM waypoints WHERE route_id = r.id) as waypoints_count
+       FROM routes r
+       WHERE r.user_id = $1
+       ORDER BY r.created_at DESC
+       LIMIT 50`,
+      [userId]
+    );
+
+    const routes = result.rows.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      origin: row.origin_label || 'Unknown',
+      destination: row.destination_label || 'Unknown',
+      total_distance_km: row.total_distance_km ? parseFloat(row.total_distance_km) : null,
+      total_duration_seconds: row.total_duration_seconds,
+      waypoints_count: parseInt(row.waypoints_count, 10),
+      status: row.status,
+      created_at: row.created_at,
+    }));
+
+    res.status(200).json({ status: 200, data: routes, requestId: req.requestId });
+  } catch (error: any) {
+    res.status(500).json({ status: 500, message: error.message || 'Failed to list routes', requestId: req.requestId });
+  }
+});
+
+/**
  * POST /api/v1/routes
  * Create a new route with waypoints.
  * Body: { name: string, waypoints: [{ latitude, longitude, label?, waypoint_type }] }

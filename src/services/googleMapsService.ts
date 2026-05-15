@@ -115,22 +115,26 @@ export class GoogleMapsService {
         lng: wp.longitude,
       }));
 
-      const response: DirectionsResponse = await this.client.directions({
-        params: {
-          origin: {
-            lat: request.origin.latitude,
-            lng: request.origin.longitude,
-          },
-          destination: {
-            lat: request.destination.latitude,
-            lng: request.destination.longitude,
-          },
-          waypoints: waypoints,
-          mode: TravelMode.driving,
-          alternatives: request.alternatives ?? false,
-          key: this.apiKey,
+      const params: any = {
+        origin: {
+          lat: request.origin.latitude,
+          lng: request.origin.longitude,
         },
-      });
+        destination: {
+          lat: request.destination.latitude,
+          lng: request.destination.longitude,
+        },
+        mode: TravelMode.driving,
+        alternatives: request.alternatives ?? false,
+        key: this.apiKey,
+      };
+
+      // Only include waypoints if there are any (passing undefined causes a crash)
+      if (waypoints && waypoints.length > 0) {
+        params.waypoints = waypoints;
+      }
+
+      const response: DirectionsResponse = await this.client.directions({ params });
 
       if (
         response.data.status !== Status.OK ||

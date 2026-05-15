@@ -10,6 +10,7 @@ import { ExportPage } from './pages/ExportPage';
 import { HistoryPage } from './pages/HistoryPage';
 import { FuelCalculatorPage } from './pages/FuelCalculatorPage';
 import { StartPlanningPage } from './pages/StartPlanningPage';
+import { VehiclesPage } from './pages/VehiclesPage';
 import './styles/main.css';
 
 class App {
@@ -69,8 +70,10 @@ class App {
         new StartPlanningPage(content).render();
         break;
       case '/cost':
-      case '/vehicles':
         new TripCostPage(content).render();
+        break;
+      case '/vehicles':
+        new VehiclesPage(content).render();
         break;
       case '/vignettes':
         new VignetteCostPage(content).render();

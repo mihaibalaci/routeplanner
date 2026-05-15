@@ -22,7 +22,7 @@ export interface CostBreakdownPanelOptions {
 }
 
 const MAX_RETRIES = 3;
-const TIMEOUT_MS = 15_000;
+const TIMEOUT_MS = 5_000;
 
 export class CostBreakdownPanel {
   private container: HTMLElement;
@@ -71,11 +71,12 @@ export class CostBreakdownPanel {
     this.durationOverrides = {};
 
     if (this.selectedVehicleId) {
+      this.state = 'loading';
+      this.render();
       this.fetchCostBreakdown();
     } else {
-      // Route available but no vehicle selected — stay in loading-like state
-      // but show vehicle selector prompt
-      this.state = 'loading';
+      // Route available but no vehicle selected — show empty with prompt
+      this.state = 'empty';
       this.render();
     }
   }
@@ -262,6 +263,8 @@ export class CostBreakdownPanel {
 
       if (apiError.status === 401) {
         this.transitionToError('Login required to view cost estimates.');
+      } else if (apiError.status === 400) {
+        this.transitionToError(apiError.message || 'Route needs to be calculated first.');
       } else if (apiError.status === 404) {
         this.transitionToError('Route not found. Please recalculate your route.');
       } else {
@@ -322,11 +325,18 @@ export class CostBreakdownPanel {
   }
 
   private renderEmpty(): string {
+    const hasRoute = !!this.routeId;
+    const icon = hasRoute ? 'directions_car' : 'route';
+    const title = hasRoute ? 'Select a vehicle' : 'No route available';
+    const text = hasRoute
+      ? 'Choose a vehicle from the list above to see cost estimates'
+      : 'Calculate a route to see cost estimates';
+
     return `
       <div class="cost-breakdown-panel__empty">
-        <span class="material-symbols-rounded cost-breakdown-panel__icon">route</span>
-        <h3 class="cost-breakdown-panel__title">No route available</h3>
-        <p class="cost-breakdown-panel__text">Calculate a route to see cost estimates</p>
+        <span class="material-symbols-rounded cost-breakdown-panel__icon">${icon}</span>
+        <h3 class="cost-breakdown-panel__title">${title}</h3>
+        <p class="cost-breakdown-panel__text">${text}</p>
       </div>
     `;
   }

@@ -9,6 +9,8 @@ const PUBLIC_PATHS = [
   '/auth/apple',
   '/auth/confirm',
   '/health',
+  '/vehicles/catalog',
+  '/fuel/prices/latest',
 ];
 
 interface JwtPayload {

@@ -8,8 +8,42 @@ import {
   setDefaultVehicle,
 } from '../services/vehicleProfileService';
 import { toVehicleProfileResponse } from '../models/vehicleProfile';
+import { query } from '../utils/database';
 
 const router = Router();
+
+/**
+ * GET /api/v1/vehicles/catalog?type={vehicle_type}
+ * Returns brand/model options for dropdowns. No auth required.
+ */
+router.get('/catalog', async (req: Request, res: Response) => {
+  try {
+    const vehicleType = req.query.type as string;
+    let sql = 'SELECT brand, model, fuel_type, avg_consumption, battery_capacity_kwh FROM vehicle_catalog';
+    const params: string[] = [];
+
+    if (vehicleType) {
+      sql += ' WHERE vehicle_type = $1';
+      params.push(vehicleType);
+    }
+
+    sql += ' ORDER BY brand, model';
+
+    const result = await query(sql, params);
+
+    res.status(200).json({
+      status: 200,
+      data: result.rows,
+      requestId: req.requestId,
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      status: 500,
+      message: error.message || 'Failed to fetch vehicle catalog',
+      requestId: req.requestId,
+    });
+  }
+});
 
 /**
  * GET /api/v1/vehicles

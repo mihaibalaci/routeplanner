@@ -4,7 +4,6 @@
 import { loadGoogleMaps, isMapsAvailable, createMap } from '../services/mapService';
 import { apiClient } from '../api/client';
 import { CostBreakdownPanel } from '../components/CostBreakdownPanel';
-import { ChargingStationLayer } from '../components/ChargingStationLayer';
 import { VehicleListComponent, type VehicleProfileResponse } from '../components/VehicleListComponent';
 
 export class RoutePlannerPage {
@@ -15,10 +14,11 @@ export class RoutePlannerPage {
   private routeResult: { distance: string; duration: string } | null = null;
   private costBreakdownPanel: CostBreakdownPanel | null = null;
   private vehicleListComponent: VehicleListComponent | null = null;
-  private chargingStationLayer: ChargingStationLayer | null = null;
   private selectedVehicleType: string | null = null;
-  private routeBounds: google.maps.LatLngBounds | null = null;
   private vehicleProfiles: VehicleProfileResponse[] = [];
+  private lastSavedRouteId: string | null = null;
+  private lastDirectionsResult: any = null;
+  private stationMarkers: google.maps.Marker[] = [];
   private mediaQuery: MediaQueryList | null = null;
   private mediaQueryHandler: ((e: MediaQueryListEvent) => void) | null = null;
 
@@ -47,8 +47,8 @@ export class RoutePlannerPage {
 
         <div class="route-planner-layout">
           <div class="route-planner-layout__main">
-            <div style="display:grid;grid-template-columns:340px 1fr;gap:var(--space-4);min-height:calc(100vh - 200px);">
-              <div style="display:flex;flex-direction:column;gap:var(--space-4);max-height:calc(100vh - 200px);overflow-y:auto;">
+            <div style="display:grid;grid-template-columns:280px 1fr;gap:var(--space-4);">
+              <div style="display:flex;flex-direction:column;gap:var(--space-4);">
                 <div class="card" style="align-self:start;">
                   <div class="card__title" style="margin-bottom:var(--space-4);">Waypoints</div>
                   <div style="display:flex;flex-direction:column;gap:var(--space-3);">
@@ -56,6 +56,9 @@ export class RoutePlannerPage {
                       <label class="input-group__label">Origin</label>
                       <input class="input" type="text" id="origin-input" placeholder="Starting point" />
                     </div>
+                    <button id="btn-swap" class="btn btn--ghost btn--sm" style="align-self:center;" title="Swap origin and destination">
+                      <span class="material-symbols-rounded">swap_vert</span>
+                    </button>
                     <div id="stops-container"></div>
                     <div class="input-group">
                       <label class="input-group__label">Destination</label>
@@ -88,12 +91,14 @@ export class RoutePlannerPage {
                   ` : ''}
                 </div>
 
-                <div id="vehicle-list-container"></div>
-                <div id="cost-breakdown-container"></div>
+                <div id="vehicle-list-container" class="vehicle-accordion"></div>
               </div>
 
-              <div class="card" style="padding:0;overflow:hidden;min-height:calc(100vh - 200px);">
-                <div id="map-container" style="width:100%;height:100%;min-height:calc(100vh - 200px);"></div>
+              <div style="display:flex;flex-direction:column;gap:var(--space-4);">
+                <div class="card" style="padding:0;overflow:hidden;aspect-ratio:4/3;min-height:600px;">
+                  <div id="map-container" style="width:100%;height:100%;"></div>
+                </div>
+                <div id="cost-breakdown-container"></div>
               </div>
             </div>
           </div>
@@ -107,18 +112,45 @@ export class RoutePlannerPage {
     this.container.querySelector('#btn-add-stop')?.addEventListener('click', () => this.addStop());
     this.container.querySelector('#btn-calculate')?.addEventListener('click', () => this.calculateRoute());
     this.container.querySelector('#btn-save-route')?.addEventListener('click', () => this.saveRouteToHistory());
+    this.container.querySelector('#btn-swap')?.addEventListener('click', () => this.swapOriginDestination());
+  }
+
+  private swapOriginDestination(): void {
+    const originInput = this.container.querySelector('#origin-input') as HTMLInputElement;
+    const destInput = this.container.querySelector('#dest-input') as HTMLInputElement;
+    if (originInput && destInput) {
+      const temp = originInput.value;
+      originInput.value = destInput.value;
+      destInput.value = temp;
+    }
   }
 
   private initVehicleList(): void {
     const listContainer = this.container.querySelector('#vehicle-list-container') as HTMLElement;
     if (!listContainer) return;
 
+    // Start collapsed — only selected vehicle visible
+    listContainer.classList.add('collapsed');
+
     this.vehicleListComponent = new VehicleListComponent({
       container: listContainer,
-      onSelect: (vehicleId: string) => this.handleVehicleChange(vehicleId),
+      onSelect: (vehicleId: string) => {
+        this.handleVehicleChange(vehicleId);
+        // Collapse after selecting a different vehicle
+        listContainer.classList.add('collapsed');
+      },
     });
 
-    this.loadVehicleProfiles();
+    this.loadVehicleProfiles().then(() => {
+      // Clicking the selected card expands/collapses the list
+      listContainer.addEventListener('click', (e) => {
+        const card = (e.target as HTMLElement).closest('.vehicle-list__card--selected') as HTMLElement;
+        if (card && listContainer.classList.contains('collapsed')) {
+          e.stopPropagation();
+          listContainer.classList.remove('collapsed');
+        }
+      });
+    });
   }
 
   private initCostBreakdownPanel(): void {
@@ -139,24 +171,9 @@ export class RoutePlannerPage {
       this.costBreakdownPanel.setSelectedVehicle(vehicleId);
     }
 
-    // Update charging station layer visibility based on vehicle type
-    this.updateChargingStationLayer();
-  }
-
-  private updateChargingStationLayer(): void {
-    if (!this.map) return;
-
-    if (this.selectedVehicleType === 'ev' && this.routeBounds) {
-      // Show charging stations for EV vehicles when a route is displayed
-      if (!this.chargingStationLayer) {
-        this.chargingStationLayer = new ChargingStationLayer({ map: this.map });
-      }
-      this.chargingStationLayer.show(this.routeBounds);
-    } else {
-      // Hide charging stations for non-EV vehicles
-      if (this.chargingStationLayer) {
-        this.chargingStationLayer.hide();
-      }
+    // Refresh station markers if a route is already calculated
+    if (this.lastDirectionsResult) {
+      this.showStationsAlongRoute(this.lastDirectionsResult);
     }
   }
 
@@ -234,6 +251,9 @@ export class RoutePlannerPage {
       // Attach Places Autocomplete to inputs
       this.attachAutocomplete('origin-input');
       this.attachAutocomplete('dest-input');
+
+      // Auto-populate origin from GPS if available
+      this.autoPopulateFromGps();
     } catch {
       mapContainer.innerHTML = `
         <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--color-text-muted);text-align:center;padding:var(--space-4);">
@@ -256,6 +276,31 @@ export class RoutePlannerPage {
       types: ['geocode', 'establishment'],
       fields: ['place_id', 'geometry', 'formatted_address'],
     });
+  }
+
+  private autoPopulateFromGps(): void {
+    const stored = sessionStorage.getItem('routeplanner_start_location');
+    if (!stored) return;
+
+    try {
+      const { address } = JSON.parse(stored);
+      if (address) {
+        const originInput = this.container.querySelector('#origin-input') as HTMLInputElement;
+        if (originInput) originInput.value = address;
+      }
+      // Clear after use
+      sessionStorage.removeItem('routeplanner_start_location');
+    } catch {
+      // Ignore parse errors
+    }
+
+    // Also check URL params for destination from Start Planning wizard
+    const params = new URLSearchParams(window.location.search);
+    const destination = params.get('destination');
+    if (destination) {
+      const destInput = this.container.querySelector('#dest-input') as HTMLInputElement;
+      if (destInput) destInput.value = destination;
+    }
   }
 
   private addStop(): void {
@@ -348,16 +393,12 @@ export class RoutePlannerPage {
             duration: this.formatDuration(totalDuration),
           };
 
-          // Store route bounds for charging station layer
-          if (result.routes[0].bounds) {
-            this.routeBounds = result.routes[0].bounds;
-          }
-
           this.updateResultsUI();
           this.saveRouteToBackend(result);
 
-          // Update charging station layer after route is calculated
-          this.updateChargingStationLayer();
+          // Show fuel/charging stations along the route
+          this.lastDirectionsResult = result;
+          this.showStationsAlongRoute(result);
         } else {
           this.error = `Route calculation failed: ${status}`;
           this.updateResultsUI();
@@ -420,14 +461,20 @@ export class RoutePlannerPage {
 
       // Create route on backend
       const createResponse = await apiClient.post<{ id: string }>('/routes', {
-        name: 'Route Planner Calculation',
+        name: `${backendWaypoints[0].label} → ${backendWaypoints[backendWaypoints.length - 1].label}`,
         waypoints: backendWaypoints,
       });
 
       const routeId = createResponse.data.id;
+      this.lastSavedRouteId = routeId;
 
-      // Trigger backend route calculation to store segments
-      await apiClient.post(`/routes/${routeId}/calculate`);
+      // Try backend route calculation (may fail if server-side Google Maps API not configured)
+      try {
+        await apiClient.post(`/routes/${routeId}/calculate`);
+      } catch {
+        // Backend calculation failed — route is still saved as draft
+        // Cost breakdown won't work but route is persisted
+      }
 
       // Notify the cost breakdown panel with the route ID
       this.costBreakdownPanel?.setRouteResult(routeId);
@@ -445,9 +492,9 @@ export class RoutePlannerPage {
       btn.innerHTML = '<span class="material-symbols-rounded">directions</span> Calculate Route';
     }
 
-    // Remove old error/result
+    // Remove old error/result/save button
     this.container.querySelector('.alert--error')?.remove();
-    this.container.querySelector('[style*="primary-50"]')?.remove();
+    this.container.querySelector('.route-result-block')?.remove();
 
     if (this.error) {
       const errorDiv = document.createElement('div');
@@ -459,31 +506,142 @@ export class RoutePlannerPage {
     }
 
     if (this.routeResult) {
-      const resultDiv = document.createElement('div');
-      resultDiv.style.cssText = 'margin-top:var(--space-4);padding:var(--space-4);background:var(--color-primary-50);border-radius:var(--radius-lg);';
-      resultDiv.innerHTML = `
-        <div style="display:flex;justify-content:space-between;margin-bottom:var(--space-2);">
-          <span style="color:var(--color-text-secondary);font-size:var(--font-size-sm);">Distance</span>
-          <strong>${this.routeResult.distance}</strong>
+      const resultBlock = document.createElement('div');
+      resultBlock.className = 'route-result-block';
+      resultBlock.innerHTML = `
+        <div style="margin-top:var(--space-4);padding:var(--space-4);background:var(--color-primary-50);border-radius:var(--radius-lg);">
+          <div style="display:flex;justify-content:space-between;margin-bottom:var(--space-2);">
+            <span style="color:var(--color-text-secondary);font-size:var(--font-size-sm);">Distance</span>
+            <strong>${this.routeResult.distance}</strong>
+          </div>
+          <div style="display:flex;justify-content:space-between;">
+            <span style="color:var(--color-text-secondary);font-size:var(--font-size-sm);">Duration</span>
+            <strong>${this.routeResult.duration}</strong>
+          </div>
         </div>
-        <div style="display:flex;justify-content:space-between;">
-          <span style="color:var(--color-text-secondary);font-size:var(--font-size-sm);">Duration</span>
-          <strong>${this.routeResult.duration}</strong>
-        </div>
+        <button id="btn-save-route" class="btn btn--primary" style="width:100%;margin-top:var(--space-3);">
+          <span class="material-symbols-rounded">bookmark_add</span> Save Route
+        </button>
       `;
       const calcBtn = this.container.querySelector('#btn-calculate');
-      calcBtn?.insertAdjacentElement('afterend', resultDiv);
+      calcBtn?.insertAdjacentElement('afterend', resultBlock);
+
+      // Bind save button
+      resultBlock.querySelector('#btn-save-route')?.addEventListener('click', () => this.saveRouteToHistory());
     }
   }
 
   private async saveRouteToHistory(): Promise<void> {
     const btn = this.container.querySelector('#btn-save-route') as HTMLButtonElement;
+
+    if (!apiClient.isAuthenticated()) {
+      if (btn) btn.innerHTML = '<span class="material-symbols-rounded">error</span> Login required';
+      return;
+    }
+
+    if (!this.lastSavedRouteId) {
+      if (btn) btn.innerHTML = '<span class="material-symbols-rounded">error</span> Calculate first';
+      return;
+    }
+
     if (btn) {
       btn.disabled = true;
       btn.innerHTML = '<span class="material-symbols-rounded">check</span> Saved!';
       btn.classList.remove('btn--ghost');
       btn.classList.add('btn--primary');
     }
+  }
+
+  private showStationsAlongRoute(directionsResult: any): void {
+    if (!this.map) return;
+
+    // Clear previous station markers
+    this.clearStationMarkers();
+
+    const google = (window as any).google;
+    if (!google?.maps?.places) return;
+
+    const route = directionsResult.routes[0];
+    if (!route || !route.legs) return;
+
+    // Determine station type based on selected vehicle
+    const isEv = this.selectedVehicleType === 'ev';
+    const placeType = isEv ? 'electric_vehicle_charging_station' : 'gas_station';
+    const iconUrl = isEv
+      ? 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><circle cx="12" cy="12" r="10" fill="#16a34a" stroke="#fff" stroke-width="2"/><text x="12" y="16" text-anchor="middle" font-size="12" fill="white">⚡</text></svg>')
+      : 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><circle cx="12" cy="12" r="10" fill="#f59e0b" stroke="#fff" stroke-width="2"/><text x="12" y="16" text-anchor="middle" font-size="11" fill="white">⛽</text></svg>');
+
+    // Sample points along the route (every ~100km or at leg midpoints)
+    const searchPoints: google.maps.LatLng[] = [];
+    for (const leg of route.legs) {
+      // Add midpoint of each leg
+      const steps = leg.steps;
+      if (steps && steps.length > 0) {
+        const midIdx = Math.floor(steps.length / 2);
+        const midStep = steps[midIdx];
+        if (midStep?.start_location) {
+          searchPoints.push(midStep.start_location);
+        }
+      }
+    }
+
+    // Also add start and end of route
+    if (route.legs[0]?.start_location) {
+      searchPoints.push(route.legs[0].start_location);
+    }
+    const lastLeg = route.legs[route.legs.length - 1];
+    if (lastLeg?.end_location) {
+      searchPoints.push(lastLeg.end_location);
+    }
+
+    // Search for stations near each point
+    const service = new google.maps.places.PlacesService(this.map);
+    const seenPlaceIds = new Set<string>();
+
+    for (const point of searchPoints) {
+      service.nearbySearch(
+        {
+          location: point,
+          radius: 5000, // 5km radius
+          type: placeType,
+        },
+        (results: any[], status: any) => {
+          if (status === google.maps.places.PlacesServiceStatus.OK && results) {
+            for (const place of results.slice(0, 5)) { // Max 5 per search point
+              if (seenPlaceIds.has(place.place_id)) continue;
+              seenPlaceIds.add(place.place_id);
+
+              const marker = new google.maps.Marker({
+                position: place.geometry.location,
+                map: this.map,
+                title: place.name,
+                icon: {
+                  url: iconUrl,
+                  scaledSize: new google.maps.Size(28, 28),
+                },
+              });
+
+              // Info window on click
+              marker.addListener('click', () => {
+                const infoWindow = new google.maps.InfoWindow({
+                  content: `<div style="padding:4px;"><strong>${place.name}</strong><br><span style="font-size:12px;color:#666;">${place.vicinity || ''}</span></div>`,
+                });
+                infoWindow.open(this.map, marker);
+              });
+
+              this.stationMarkers.push(marker);
+            }
+          }
+        }
+      );
+    }
+  }
+
+  private clearStationMarkers(): void {
+    for (const marker of this.stationMarkers) {
+      marker.setMap(null);
+    }
+    this.stationMarkers = [];
   }
 
   private formatDuration(seconds: number): string {
@@ -498,10 +656,7 @@ export class RoutePlannerPage {
       this.vehicleListComponent.destroy();
       this.vehicleListComponent = null;
     }
-    if (this.chargingStationLayer) {
-      this.chargingStationLayer.destroy();
-      this.chargingStationLayer = null;
-    }
+    this.clearStationMarkers();
     this.container.innerHTML = this.build();
     this.bindEvents();
     this.initMap();

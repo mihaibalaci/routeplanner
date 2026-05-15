@@ -1,7 +1,5 @@
 /**
  * History Page — Lists saved routes ordered by date descending.
- * Each entry shows: summary, date, vehicle, distance, cost.
- * Clicking a saved route reloads it in the Route Planner.
  */
 import { apiClient } from '../api/client';
 
@@ -11,10 +9,8 @@ interface SavedRoute {
   origin: string;
   destination: string;
   waypoints_count: number;
-  vehicle_name: string;
-  vehicle_type: string;
-  total_distance_km: number;
-  total_cost_eur: number | null;
+  total_distance_km: number | null;
+  status: string;
   created_at: string;
 }
 
@@ -62,9 +58,9 @@ export class HistoryPage {
         <div class="empty-state">
           <span class="material-symbols-rounded empty-state__icon">history</span>
           <p class="empty-state__title">No saved routes yet</p>
-          <p class="empty-state__text">Plan and save a route to see it here.</p>
-          <a href="/start" data-nav="/start" class="btn btn--primary" style="margin-top:var(--space-4);">
-            <span class="material-symbols-rounded">explore</span> Start Planning
+          <p class="empty-state__text">Plan and calculate a route to see it here.</p>
+          <a href="/" data-nav="/" class="btn btn--primary" style="margin-top:var(--space-4);">
+            <span class="material-symbols-rounded">map</span> Route Planner
           </a>
         </div>
       </div>
@@ -74,30 +70,32 @@ export class HistoryPage {
   private buildList(): string {
     const rows = this.routes.map(route => {
       const date = new Date(route.created_at).toLocaleDateString('en-GB', {
-        day: 'numeric', month: 'short', year: 'numeric'
+        day: 'numeric', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
       });
       const distance = route.total_distance_km ? `${route.total_distance_km.toFixed(0)} km` : '—';
-      const cost = route.total_cost_eur !== null ? `€${route.total_cost_eur.toFixed(2)}` : '—';
-      const typeIcon = route.vehicle_type === 'ev' ? 'electric_car' :
-        route.vehicle_type === 'motorcycle' ? 'two_wheeler' :
-        route.vehicle_type === 'camper' ? 'rv_hookup' : 'directions_car';
+      const statusBadge = route.status === 'calculated'
+        ? '<span class="badge badge--success">Calculated</span>'
+        : '<span class="badge badge--neutral">Draft</span>';
 
       return `
         <div class="history-item" data-route-id="${route.id}" role="button" tabindex="0">
           <div class="history-item__icon">
-            <span class="material-symbols-rounded">${typeIcon}</span>
+            <span class="material-symbols-rounded">route</span>
           </div>
           <div class="history-item__details">
             <div class="history-item__title">${route.origin} → ${route.destination}</div>
             <div class="history-item__meta">
-              <span>${route.vehicle_name}</span>
-              <span>•</span>
               <span>${distance}</span>
               ${route.waypoints_count > 2 ? `<span>•</span><span>${route.waypoints_count - 2} stops</span>` : ''}
+              <span>•</span>
+              ${statusBadge}
+            </div>
+            <div style="margin-top:4px;font-size:var(--font-size-xs);color:var(--color-text-muted);font-family:monospace;">
+              ID: <span class="route-id-text" title="Click to copy">${route.id}</span>
             </div>
           </div>
           <div class="history-item__right">
-            <div class="history-item__cost">${cost}</div>
             <div class="history-item__date">${date}</div>
           </div>
         </div>
@@ -110,17 +108,35 @@ export class HistoryPage {
           ${rows}
         </div>
       </div>
+      <p style="margin-top:var(--space-3);font-size:var(--font-size-sm);color:var(--color-text-secondary);">
+        ${this.routes.length} route${this.routes.length !== 1 ? 's' : ''} saved
+      </p>
     `;
   }
 
   private bindEvents(): void {
     this.container.addEventListener('click', (e) => {
+      // Copy route ID on click
+      const idEl = (e.target as HTMLElement).closest('.route-id-text') as HTMLElement;
+      if (idEl) {
+        e.stopPropagation();
+        navigator.clipboard.writeText(idEl.textContent || '').then(() => {
+          idEl.style.color = 'var(--color-primary)';
+          idEl.textContent = 'Copied!';
+          setTimeout(() => {
+            idEl.style.color = '';
+            idEl.textContent = idEl.closest('.history-item')?.getAttribute('data-route-id') || '';
+          }, 1500);
+        });
+        return;
+      }
+
       const item = (e.target as HTMLElement).closest('.history-item') as HTMLElement;
       if (item) {
         const routeId = item.dataset.routeId;
         if (routeId) {
           window.history.pushState({}, '', `/?route=${routeId}`);
-          window.dispatchEvent(new CustomEvent('app:navigate', { detail: { path: '/', query: { route: routeId } } }));
+          window.dispatchEvent(new CustomEvent('app:navigate', { detail: { path: '/' } }));
         }
       }
     });
@@ -134,8 +150,9 @@ export class HistoryPage {
     }
 
     try {
-      const response = await apiClient.get<{ data: SavedRoute[] }>('/routes/history');
-      this.routes = response.data?.data ?? [];
+      const response = await apiClient.get<any>('/routes');
+      const data = response.data?.data ?? response.data ?? [];
+      this.routes = Array.isArray(data) ? data : [];
     } catch {
       this.routes = [];
     }
